@@ -1,5 +1,6 @@
 import express from "express";
 import Producto from "../../models/portafolio/productos.js";
+import categorias from "../../models/categorias.js";
 import Servicio from "../../models/portafolio/servicios.js";
 import Factura from "../../models/Factura.js";
 import moment from "moment";
@@ -28,7 +29,7 @@ router.get("/get-informacion/:fecha", async (req, res) => {
     const productos = await Producto.find(
       {},
       // "nombre simboloMedida codigo _id"
-      "nombre simboloMedida _id"
+      "nombre simboloMedida idCategoria _id"
     ).lean();
     // Asignar tipo 'productos' a cada producto
     const iProductos = productos.map((producto) => ({
@@ -40,7 +41,7 @@ router.get("/get-informacion/:fecha", async (req, res) => {
     const servicios = await Servicio.find(
       {},
       // "nombre simboloMedida codigo _id"
-      "nombre simboloMedida _id"
+      "nombre simboloMedida idCategoria _id"
     ).lean();
     // Asignar tipo 'servicios' a cada servicio
     const iServicios = servicios.map((servicio) => ({
@@ -50,6 +51,17 @@ router.get("/get-informacion/:fecha", async (req, res) => {
 
     // Unificar productos y servicios
     const iPortafolio = [...iProductos, ...iServicios];
+
+    // Obtener todas las categorías
+    const iCategorias = await categorias.find({}, "name _id");
+
+    const handleGetCategoria = (id) => {
+      const dataCat = iCategorias.find((cat) => String(cat._id) === id);
+      return {
+        id: String(dataCat._id),
+        name: dataCat.name,
+      };
+    };
 
     // Obtener facturas
     const facturas = await Factura.find({
@@ -73,6 +85,7 @@ router.get("/get-informacion/:fecha", async (req, res) => {
 
         // Si se encontró el elemento, agregar información combinada al mapa
         if (elemento) {
+          // console.log(elemento);
           const id = elemento._id.toString();
           // Si el _id ya existe en el mapa, sumar las cantidades y totales
           if (combinedInfoMap[id]) {
@@ -83,7 +96,7 @@ router.get("/get-informacion/:fecha", async (req, res) => {
             combinedInfoMap[id] = {
               nombre: elemento.nombre,
               _id: elemento._id,
-              // codigo: elemento.codigo,
+              categoria: handleGetCategoria(elemento.idCategoria),
               tipo: elemento.tipo,
               cantidad: +item.cantidad,
               simboloMedida: elemento.simboloMedida, // Corregido el nombre del campo
@@ -102,7 +115,7 @@ router.get("/get-informacion/:fecha", async (req, res) => {
           nombre: elemento.nombre,
           _id: elemento._id,
           tipo: elemento.tipo,
-          // codigo: elemento.codigo,
+          categoria: handleGetCategoria(elemento.idCategoria),
           cantidad: 0,
           simboloMedida: elemento.simboloMedida, // Corregido el nombre del campo
           montoGenerado: 0,

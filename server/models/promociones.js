@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const PromocionesSchema = new mongoose.Schema(
   {
@@ -11,11 +11,11 @@ const PromocionesSchema = new mongoose.Schema(
     descripcion: String,
     descuento: Number,
     vigencia: Number,
-    state: Boolean,
+    state: String,
   },
-  { collection: 'Promocion' }
+  { collection: "Promocion" }
 );
 
-const Promocion = mongoose.model('Promocion', PromocionesSchema);
+const Promocion = mongoose.model("Promocion", PromocionesSchema);
 
 export default Promocion;

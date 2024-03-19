@@ -1,14 +1,14 @@
-import express from 'express';
-import Donacion from '../models/donacion.js';
-import Factura from '../models/Factura.js';
-import Almacen from '../models/almacen.js';
+import express from "express";
+import Donacion from "../models/donacion.js";
+import Factura from "../models/Factura.js";
+import Almacen from "../models/almacen.js";
 
-import moment from 'moment';
-import db from '../config/db.js';
+import moment from "moment";
+import db from "../config/db.js";
 
 const router = express.Router();
 
-router.post('/add-to-donation', async (req, res) => {
+router.post("/add-to-donation", async (req, res) => {
   // Iniciar una transacción
   const session = await db.startSession();
   session.startTransaction();
@@ -19,20 +19,24 @@ router.post('/add-to-donation', async (req, res) => {
     const updatedFacturas = [];
 
     // Genera la fecha y hora actual usando moment
-    const fechaHora = moment().format('YYYY-MM-DD HH:mm');
+    const fechaHora = moment().format("YYYY-MM-DD HH:mm");
     for (const facturaId of Ids) {
       const factura = await Factura.findById(facturaId).session(session);
       if (!factura) {
         throw new Error(`Factura no encontrada: ${facturaId}`);
       }
 
-      const almacenData = await Almacen.findOne({ serviceOrder: facturaId }).session(session);
+      const almacenData = await Almacen.findOne({
+        serviceOrder: facturaId,
+      }).session(session);
       if (!almacenData) {
-        throw new Error(`Datos de almacen no encontrados para la factura: ${facturaId}`);
+        throw new Error(
+          `Datos de almacen no encontrados para la factura: ${facturaId}`
+        );
       }
 
       factura.location = 3; // Cambiar la ubicación a 3
-      factura.estadoPrenda = 'donado';
+      factura.estadoPrenda = "donado";
 
       await factura.save({ session: session });
       await Almacen.updateMany(
@@ -44,8 +48,8 @@ router.post('/add-to-donation', async (req, res) => {
       updatedFacturas.push({
         ...factura.toObject(),
         donationDate: {
-          fecha: fechaHora.split(' ')[0],
-          hora: fechaHora.split(' ')[1],
+          fecha: fechaHora.split(" ")[0],
+          hora: fechaHora.split(" ")[1],
         },
       });
     }
@@ -54,8 +58,8 @@ router.post('/add-to-donation', async (req, res) => {
     const donacion = new Donacion({
       serviceOrder: Ids,
       donationDate: {
-        fecha: fechaHora.split(' ')[0],
-        hora: fechaHora.split(' ')[1],
+        fecha: fechaHora.split(" ")[0],
+        hora: fechaHora.split(" ")[1],
       },
     });
 
@@ -67,11 +71,13 @@ router.post('/add-to-donation', async (req, res) => {
   } catch (error) {
     // En caso de error, hacer un rollback de la transacción
     await session.abortTransaction();
-    res.status(500).json({ mensaje: 'Error en la transacción', error: error.message });
+    res
+      .status(500)
+      .json({ mensaje: "Error en la transacción", error: error.message });
   }
 });
 
-router.get('/get-donated-orders', async (req, res) => {
+router.get("/get-donated-orders", async (req, res) => {
   try {
     // Obtén todos los registros de Donacion
     const donacionRegistros = await Donacion.find();
@@ -104,12 +110,12 @@ router.get('/get-donated-orders', async (req, res) => {
 
     res.status(200).json(resultados);
   } catch (error) {
-    console.error('Error al obtener datos: ', error);
-    res.status(500).json({ error: 'Error interno del servidor' });
+    console.error("Error al obtener datos: ", error);
+    res.status(500).json({ error: "Error interno del servidor" });
   }
 });
 
-router.get('/get-donated/:idOrder', async (req, res) => {
+router.get("/get-donated/:idOrder", async (req, res) => {
   const idOrder = req.params.idOrder;
   try {
     // Obtén todos los registros de Donacion
@@ -136,11 +142,11 @@ router.get('/get-donated/:idOrder', async (req, res) => {
     if (resultados) {
       res.status(200).json(resultados);
     } else {
-      res.status(404).json({ mensaje: 'ID de orden no encontrado' });
+      res.status(404).json({ mensaje: "ID de orden no encontrado" });
     }
   } catch (error) {
-    console.error('Error al obtener datos: ', error);
-    res.status(500).json({ mensaje: 'Error interno del servidor' });
+    console.error("Error al obtener datos: ", error);
+    res.status(500).json({ mensaje: "Error interno del servidor" });
   }
 });
 

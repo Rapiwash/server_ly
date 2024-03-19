@@ -417,12 +417,15 @@ router.post("/get-report/date-prevista/:type", async (req, res) => {
 
     const infoDelivery = await handleGetInfoDelivery();
 
-    itemsReporte.push(`SER${infoDelivery._id.toString()}`);
+    itemsReporte.push({
+      order: itemsReporte.length,
+      id: `SER${infoDelivery._id.toString()}`,
+    });
 
-    const splitItem = itemsReporte.map((id) => {
+    const splitItem = itemsReporte.map((items) => {
       return {
-        ID: id.substring(3),
-        TIPO: id.substring(0, 3),
+        ID: items.id.substring(3),
+        TIPO: items.id.substring(0, 3),
       };
     });
 
@@ -489,10 +492,13 @@ router.post("/get-report/date-prevista/:type", async (req, res) => {
               for (const item of groupedResults) {
                 // Verificamos si el identificador está en los idsCantidades de cada grupo
                 if (item.idsCantidades.includes(order.identificador)) {
-                  // Si el identificador está en idsCantidades, sumamos la cantidad al resultado.InfoItems correspondiente
-                  resultado.InfoItems[item.idColumna] =
-                    (resultado.InfoItems[item.idColumna] || 0) +
-                    Number(order.cantidad);
+                  // Verificar si resultado.InfoItems[item.idColumna] es un número
+                  const existingValue =
+                    parseFloat(resultado.InfoItems[item.idColumna]) || 0;
+                  // Sumar el valor existente con la cantidad de la orden y formatearlo a 2 decimales
+                  resultado.InfoItems[item.idColumna] = (
+                    existingValue + Number(order.cantidad)
+                  ).toFixed(2);
                 }
               }
             })
