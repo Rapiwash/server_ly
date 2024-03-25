@@ -11,7 +11,7 @@ const NegocioSchema = new mongoose.Schema(
     estado: Boolean,
     itemsAtajos: Array,
     itemsInformeDiario: [],
-    rolQAnulan: ["master", "admin", "coord"],
+    rolQAnulan: ["gerente", "admin", "coord"],
     horario: {
       dias: [],
       horas: {

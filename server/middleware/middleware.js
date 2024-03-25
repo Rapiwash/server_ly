@@ -111,7 +111,7 @@ export const openingHours = async (req, res, next) => {
           type: "outTime",
         });
       }
-    } else if (rol === "admin" || rol === "master") {
+    } else if (rol === "admin" || rol === "gerente") {
       next();
       return;
     } else {
