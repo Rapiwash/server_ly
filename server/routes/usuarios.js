@@ -224,7 +224,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ mensaje: "Contraseña incorrecta" });
     }
 
-    if (user._validate === false) {
+    if (user.state === "inactivo") {
       return res
         .status(200)
         .json({ type: "validate", info: user._id, id: user._id });
