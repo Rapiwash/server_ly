@@ -1,8 +1,7 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const ServicioSchema = new mongoose.Schema(
   {
-    codigo: String,
     nombre: String,
     idCategoria: String,
     precioVenta: Number,
@@ -10,9 +9,9 @@ const ServicioSchema = new mongoose.Schema(
     simboloMedida: String,
     estado: Boolean,
   },
-  { collection: 'Servicio' }
+  { collection: "Servicio" }
 );
 
-const Servicio = mongoose.model('Servicio', ServicioSchema);
+const Servicio = mongoose.model("Servicio", ServicioSchema);
 
 export default Servicio;

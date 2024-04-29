@@ -1,8 +1,9 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const clienteSchema = new mongoose.Schema({
   dni: String,
   nombre: String,
+  direccion: String,
   phone: String,
   infoScore: [
     {
@@ -18,6 +19,6 @@ const clienteSchema = new mongoose.Schema({
   scoreTotal: Number,
 });
 
-const clientes = mongoose.model('clientes', clienteSchema);
+const clientes = mongoose.model("clientes", clienteSchema);
 
 export default clientes;

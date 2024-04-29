@@ -28,7 +28,6 @@ router.get("/get-informacion/:fecha", async (req, res) => {
     // Obtener productos
     const productos = await Producto.find(
       {},
-      // "nombre simboloMedida codigo _id"
       "nombre simboloMedida idCategoria _id"
     ).lean();
     // Asignar tipo 'productos' a cada producto
@@ -40,7 +39,6 @@ router.get("/get-informacion/:fecha", async (req, res) => {
     // Obtener servicios
     const servicios = await Servicio.find(
       {},
-      // "nombre simboloMedida codigo _id"
       "nombre simboloMedida idCategoria _id"
     ).lean();
     // Asignar tipo 'servicios' a cada servicio
@@ -85,23 +83,31 @@ router.get("/get-informacion/:fecha", async (req, res) => {
 
         // Si se encontró el elemento, agregar información combinada al mapa
         if (elemento) {
-          // console.log(elemento);
           const id = elemento._id.toString();
-          // Si el _id ya existe en el mapa, sumar las cantidades y totales
-          if (combinedInfoMap[id]) {
-            combinedInfoMap[id].cantidad += +item.cantidad;
-            combinedInfoMap[id].montoGenerado += +item.total;
-          } else {
-            // Si el _id no existe en el mapa, agregar un nuevo objeto al mapa
+          // Inicializar combinedInfoMap[id] si es null
+          if (!combinedInfoMap[id]) {
             combinedInfoMap[id] = {
               nombre: elemento.nombre,
               _id: elemento._id,
               categoria: handleGetCategoria(elemento.idCategoria),
               tipo: elemento.tipo,
-              cantidad: +item.cantidad,
+              cantidad: 0,
               simboloMedida: elemento.simboloMedida, // Corregido el nombre del campo
-              montoGenerado: +item.total,
+              montoGenerado: 0,
             };
+          }
+          // Asegurarse de que item.cantidad y item.total sean numéricos antes de sumarlos
+          const cantidad = Number(item.cantidad);
+          const total = Number(item.total);
+          if (!isNaN(cantidad) && !isNaN(total)) {
+            // Incrementar las cantidades y totales
+            combinedInfoMap[id].cantidad += cantidad;
+            combinedInfoMap[id].montoGenerado += total;
+          } else {
+            console.log("Cantidad no es un valor numérico válido:", cantidad);
+            console.log("Total no es un valor numérico válido:", total);
+            console.log("ID del elemento:", id);
+            console.log("ID de la factura:", factura._id);
           }
         }
       }
@@ -134,5 +140,4 @@ router.get("/get-informacion/:fecha", async (req, res) => {
       .json({ mensaje: "Error al obtener la información combinada" });
   }
 });
-
 export default router;

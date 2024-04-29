@@ -1,6 +1,5 @@
 import express from "express";
 import Factura from "../models/Factura.js";
-import Delivery from "../models/delivery.js";
 import Gasto from "../models/gastos.js";
 import Usuario from "../models/usuarios/usuarios.js";
 import moment from "moment";
@@ -25,15 +24,65 @@ router.get("/get-reporte-mensual", async (req, res) => {
     const fechaFinal = fechaInicial.clone().endOf("month");
 
     // Consultar facturas en ese rango de fechas y con estadoPrenda no anulado
-    const facturas = await Factura.find({
-      "dateRecepcion.fecha": {
-        $gte: fechaInicial.format("YYYY-MM-DD"),
-        $lte: fechaFinal.format("YYYY-MM-DD"),
+    const ordenes = await Factura.aggregate([
+      {
+        $match: {
+          "dateRecepcion.fecha": {
+            $gte: fechaInicial.format("YYYY-MM-DD"),
+            $lte: fechaFinal.format("YYYY-MM-DD"),
+          },
+          estadoPrenda: { $ne: "anulado" }, // EstadoPrenda debe ser distinto de "anulado"
+        },
       },
-      estadoPrenda: { $ne: "anulado" }, // EstadoPrenda debe ser distinto de "anulado"
-    });
+      {
+        $lookup: {
+          from: "pagos", // Nombre de la colección de pagos
+          localField: "_id", // Campo de la factura que se usará para la unión
+          foreignField: "idOrden", // Campo en la colección de pagos que se relaciona con la factura
+          as: "ListPago", // Nombre del campo donde se almacenarán los pagos relacionados
+        },
+      },
+      {
+        $addFields: {
+          ListPagoIds: { $toString: "$_id" }, // Convertir el _id de la factura a cadena
+        },
+      },
+      {
+        $lookup: {
+          from: "pagos", // Nombre de la colección de pagos
+          localField: "ListPagoIds", // Campo de la factura convertido a cadena
+          foreignField: "idOrden", // Campo en la colección de pagos que se relaciona con la factura
+          as: "ListPago", // Nombre del campo donde se almacenarán los pagos relacionados
+        },
+      },
+      {
+        $unset: "ListPagoIds", // Eliminar el campo temporal ListPagoIds después de la unión
+      },
+      {
+        $addFields: {
+          ListPago: {
+            $map: {
+              input: "$ListPago", // Itera sobre los pagos relacionados
+              as: "pago", // Alias para cada pago
+              in: {
+                // Agrega los campos específicos del pago
+                _id: "$$pago._id",
+                idUser: "$$pago.idUser",
+                idOrden: "$$pago.idOrden",
+                orden: "$codRecibo",
+                date: "$$pago.date",
+                nombre: "$Nombre",
+                total: "$$pago.total",
+                metodoPago: "$$pago.metodoPago",
+                Modalidad: "$Modalidad",
+              },
+            },
+          },
+        },
+      },
+    ]);
 
-    res.json([...facturas]);
+    res.status(200).json(ordenes);
   } catch (error) {
     console.error(error);
     res.status(500).json({ mensaje: "No se pudo Generar reporte EXCEL" });
@@ -100,11 +149,94 @@ router.get("/get-reporte-pendientes", async (req, res) => {
     const fechaActual = moment().format("YYYY-MM-DD HH:mm:ss");
 
     // Consultar facturas que cumplan con las condiciones
-    const facturas = await Factura.find({
-      estadoPrenda: "pendiente",
-      estado: "registrado",
-      location: 1,
-    });
+    const facturas = await Factura.aggregate([
+      {
+        $match: {
+          estadoPrenda: "pendiente",
+          estado: "registrado",
+          location: 1, // Agregar esta condición para el campo location igual a 1
+        },
+      },
+      {
+        $lookup: {
+          from: "pagos", // Nombre de la colección de pagos
+          localField: "_id", // Campo de la factura que se usará para la unión
+          foreignField: "idOrden", // Campo en la colección de pagos que se relaciona con la factura
+          as: "ListPago", // Nombre del campo donde se almacenarán los pagos relacionados
+        },
+      },
+      {
+        $addFields: {
+          ListPagoIds: { $toString: "$_id" }, // Convertir el _id de la factura a cadena
+        },
+      },
+      {
+        $lookup: {
+          from: "pagos", // Nombre de la colección de pagos
+          localField: "ListPagoIds", // Campo de la factura convertido a cadena
+          foreignField: "idOrden", // Campo en la colección de pagos que se relaciona con la factura
+          as: "ListPago", // Nombre del campo donde se almacenarán los pagos relacionados
+        },
+      },
+      {
+        $unset: "ListPagoIds", // Eliminar el campo temporal ListPagoIds después de la unión
+      },
+      {
+        $addFields: {
+          ListPago: {
+            $map: {
+              input: "$ListPago", // Itera sobre los pagos relacionados
+              as: "pago", // Alias para cada pago
+              in: {
+                // Agrega los campos específicos del pago
+                _id: "$$pago._id",
+                idUser: "$$pago.idUser",
+                idOrden: "$$pago.idOrden",
+                orden: "$codRecibo",
+                date: "$$pago.date",
+                nombre: "$Nombre",
+                total: "$$pago.total",
+                metodoPago: "$$pago.metodoPago",
+                Modalidad: "$Modalidad",
+              },
+            },
+          },
+        },
+      },
+      {
+        $project: {
+          // Proyecta los campos de las facturas junto con el campo ListPago creado
+          dateCreation: 1,
+          codRecibo: 1,
+          dateRecepcion: 1,
+          Modalidad: 1,
+          Nombre: 1,
+          Items: 1,
+          celular: 1,
+          direccion: 1,
+          datePrevista: 1,
+          dateEntrega: 1,
+          descuento: 1,
+          estadoPrenda: 1,
+          estado: 1,
+          index: 1,
+          dni: 1,
+          subTotal: 1,
+          totalNeto: 1,
+          cargosExtras: 1,
+          factura: 1,
+          modeRegistro: 1,
+          notas: 1,
+          modoDescuento: 1,
+          gift_promo: 1,
+          location: 1,
+          attendedBy: 1,
+          lastEdit: 1,
+          typeRegistro: 1,
+          ListPago: 1,
+        },
+      },
+    ]);
 
     // Filtrar las facturas que cumplen con la diferencia de días
     const facturasPendientes = facturas.filter((factura) => {

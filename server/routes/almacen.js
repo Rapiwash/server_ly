@@ -1,13 +1,13 @@
-import express from 'express';
-import Almacen from '../models/almacen.js';
-import Factura from '../models/Factura.js';
-import moment from 'moment';
-import db from '../config/db.js';
+import express from "express";
+import Almacen from "../models/almacen.js";
+import Factura from "../models/Factura.js";
+import moment from "moment";
+import db from "../config/db.js";
 
 const router = express.Router();
 
 // Nueva ruta para realizar ambas operaciones
-router.post('/add-to-warehouse', async (req, res) => {
+router.post("/add-to-warehouse", async (req, res) => {
   // Iniciar una transacción
   const session = await db.startSession();
   session.startTransaction();
@@ -16,7 +16,7 @@ router.post('/add-to-warehouse', async (req, res) => {
     // Actualizar la ubicación de las facturas
     const updatedFacturas = [];
     // Agregar las facturas al almacén
-    const fechaHora = moment().format('YYYY-MM-DD HH:mm');
+    const fechaHora = moment().format("YYYY-MM-DD HH:mm");
     for (const facturaId of Ids) {
       const factura = await Factura.findById(facturaId).session(session);
       if (!factura) {
@@ -29,8 +29,8 @@ router.post('/add-to-warehouse', async (req, res) => {
       updatedFacturas.push({
         ...factura.toObject(),
         dateStorage: {
-          fecha: fechaHora.split(' ')[0],
-          hora: fechaHora.split(' ')[1],
+          fecha: fechaHora.split(" ")[0],
+          hora: fechaHora.split(" ")[1],
         },
       });
     }
@@ -38,8 +38,8 @@ router.post('/add-to-warehouse', async (req, res) => {
     const almacenamiento = new Almacen({
       serviceOrder: Ids,
       storageDate: {
-        fecha: fechaHora.split(' ')[0],
-        hora: fechaHora.split(' ')[1],
+        fecha: fechaHora.split(" ")[0],
+        hora: fechaHora.split(" ")[1],
       },
     });
 
@@ -49,58 +49,109 @@ router.post('/add-to-warehouse', async (req, res) => {
     await session.commitTransaction();
   } catch (error) {
     await session.abortTransaction();
-    res.status(500).json({ mensaje: 'Error en la transacción', error: error.message });
+    res
+      .status(500)
+      .json({ mensaje: "Error en la transacción", error: error.message });
   }
 });
 
-router.get('/get-warehouse-service-order', async (req, res) => {
+router.get("/get-warehouse-service-order", async (req, res) => {
   try {
-    // Obtén todos los registros de Almacen
-    const almacenRegistros = await Almacen.find();
+    const reportesFacturas = await Almacen.aggregate([
+      {
+        $unwind: "$serviceOrder", // Desenrollar el array de serviceOrder
+      },
+      {
+        $addFields: {
+          serviceOrderId: { $toObjectId: "$serviceOrder" }, // Convertir cada elemento de serviceOrder a ObjectId
+        },
+      },
+      {
+        $lookup: {
+          from: "facturas",
+          localField: "serviceOrderId",
+          foreignField: "_id",
+          as: "factura",
+        },
+      },
+      {
+        $unwind: "$factura", // Desenrollar el array de documentos de factura
+      },
+      {
+        $match: {
+          "factura.estadoPrenda": "pendiente", // Filtrar las facturas con estado pendiente
+        },
+      },
+      {
+        $addFields: {
+          factura: {
+            $mergeObjects: ["$factura", { dateStorage: "$storageDate" }],
+          }, // Combinar campos de factura con dateStorage
+        },
+      },
+      {
+        $replaceRoot: { newRoot: "$factura" }, // Hacer que los campos de factura sean el nuevo root del documento
+      },
+      {
+        $lookup: {
+          from: "pagos",
+          let: { facturaId: "$_id" }, // Variable local para el _id de la factura
+          pipeline: [
+            {
+              $match: {
+                $expr: { $eq: ["$idOrden", { $toString: "$$facturaId" }] }, // Convertir el _id de la factura a string y compararlo con idOrden
+              },
+            },
+          ],
+          as: "ListPago", // Nombre del campo donde se almacenarán los pagos relacionados
+        },
+      },
+      {
+        $addFields: {
+          ListPago: {
+            $map: {
+              input: "$ListPago", // Itera sobre los pagos relacionados
+              as: "pago", // Alias para cada pago
+              in: {
+                // Agrega los campos específicos del pago
+                _id: "$$pago._id",
+                idUser: "$$pago.idUser",
+                idOrden: "$$pago.idOrden",
+                orden: "$codRecibo",
+                date: "$$pago.date",
+                nombre: "$Nombre",
+                total: "$$pago.total",
+                metodoPago: "$$pago.metodoPago",
+                Modalidad: "$Modalidad",
+              },
+            },
+          },
+        },
+      },
+    ]);
 
-    // Array para almacenar los resultados finales
-    const resultados = [];
-
-    // Itera a través de los registros de Almacen
-    for (const almacenRegistro of almacenRegistros) {
-      // Itera a través de los serviceOrder del registro de Almacen
-      for (const serviceOrderId of almacenRegistro.serviceOrder) {
-        // Encuentra la factura correspondiente a serviceOrderId
-        const factura = await Factura.findOne({ _id: serviceOrderId });
-
-        if (factura && factura.estadoPrenda === 'pendiente') {
-          // Convierte el objeto factura a un objeto JavaScript estándar
-          const facturaObj = factura.toObject();
-
-          // Crea un objeto que incluye todos los campos de factura y agrega dateStorage
-          const resultadoFactura = {
-            ...facturaObj,
-            dateStorage: almacenRegistro.storageDate,
-          };
-
-          // Agrega el objeto a los resultados
-          resultados.push(resultadoFactura);
-        }
-      }
-    }
-
-    res.status(200).json(resultados);
+    res.status(200).json(reportesFacturas);
   } catch (error) {
-    console.error('Error al obtener datos: ', error);
-    res.status(500).json({ mensaje: 'No se pudo obtener ordenes almacenadas' });
+    console.error("Error al obtener datos: ", error);
+    res
+      .status(500)
+      .json({ mensaje: "No se pudo obtener facturas almacenadas" });
   }
 });
 
-router.delete('/remove-from-warehouse/:id', async (req, res) => {
+router.delete("/remove-from-warehouse/:id", async (req, res) => {
   try {
     const { id } = req.params; // Obtén el ID que se desea eliminar
 
     // Actualiza todos los registros de Almacen
-    await Almacen.updateMany({ serviceOrder: id }, { $pull: { serviceOrder: id } });
-    res.status(200).json({ mensaje: 'Valor removido de Almacen' });
+    await Almacen.updateMany(
+      { serviceOrder: id },
+      { $pull: { serviceOrder: id } }
+    );
+    res.status(200).json({ mensaje: "Valor removido de Almacen" });
   } catch (error) {
-    console.error('Error al eliminar el valor de serviceOrder: ', error);
-    res.status(500).json({ mensaje: 'No remover orden de almacen' });
+    console.error("Error al eliminar el valor de serviceOrder: ", error);
+    res.status(500).json({ mensaje: "No remover orden de almacen" });
   }
 });
 

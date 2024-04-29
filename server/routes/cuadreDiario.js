@@ -2,16 +2,16 @@ import express from "express";
 import CuadreDiario from "../models/cuadreDiario.js";
 import Factura from "../models/Factura.js";
 import Anular from "../models/anular.js";
-import Delivery from "../models/delivery.js";
 import Gasto from "../models/gastos.js";
 import Usuario from "../models/usuarios/usuarios.js";
 import moment from "moment";
 
 import { openingHours } from "../middleware/middleware.js";
 import { GetAnuladoId, GetOrderId } from "../utils/utilsFuncion.js";
+import Pagos from "../models/pagos.js";
 const router = express.Router();
 
-const handleGetInfoUser = async (id) => {
+export const handleGetInfoUser = async (id) => {
   const iUser = await Usuario.findById(id).lean();
 
   return {
@@ -23,7 +23,7 @@ const handleGetInfoUser = async (id) => {
 };
 
 router.post("/save-cuadre", openingHours, async (req, res) => {
-  const { infoCuadre, orders, deliverys, gastos } = req.body;
+  const { infoCuadre } = req.body;
 
   try {
     // Obtén el valor máximo actual de 'index' en tus documentos
@@ -43,52 +43,6 @@ router.post("/save-cuadre", openingHours, async (req, res) => {
     const cuadreSavedDocument = await newCuadre.save();
     const cuadreSaved = cuadreSavedDocument.toObject();
 
-    // Actualiza los documentos de Factura en paralelo
-    await Promise.all(
-      orders.map(async (order) => {
-        const { idOrder, idsPago } = order;
-
-        // Encuentra el documento en la colección Factura donde _id coincide con idOrder
-        const facturaToUpdate = await Factura.findOne({ _id: idOrder });
-
-        if (facturaToUpdate) {
-          // Actualiza ListPago utilizando map para crear un nuevo array
-          facturaToUpdate.ListPago = facturaToUpdate.ListPago.map((pago) => {
-            if (idsPago.includes(pago._id.toString())) {
-              pago.idCuadre = cuadreSaved._id;
-            }
-            return pago;
-          });
-
-          // Guarda los cambios en el documento de Factura
-          await facturaToUpdate.save();
-        }
-      })
-    );
-
-    // Agrega la asignación de idCuadre para Gastos
-    await Promise.all(
-      gastos.map(async (idGasto) => {
-        await Gasto.findByIdAndUpdate(
-          idGasto,
-          { idCuadre: cuadreSaved._id },
-          { new: true }
-        );
-      })
-    );
-
-    // Agrega la asignación de idCuadre para Deliverys
-    await Promise.all(
-      deliverys.map(async (idDelivery) => {
-        await Delivery.findByIdAndUpdate(
-          idDelivery,
-          { idCuadre: cuadreSaved._id },
-          { new: true }
-        );
-      })
-    );
-
-    // res.json({ ...cuadreSaved, infoUser: await handleGetInfoUser(cuadreSaved.userID), userID: undefined });
     res.json("Guardado Exitoso");
   } catch (error) {
     console.error("Error al Guardar Delivery:", error);
@@ -109,43 +63,6 @@ router.put("/update-cuadre/:id", openingHours, async (req, res) => {
     if (!cuadreUpdate) {
       return res.status(404).json({ mensaje: "Cuadre no encontrado" });
     }
-
-    // Actualiza los documentos de Factura en paralelo
-    await Promise.all(
-      orders.map(async (order) => {
-        const { idOrder, idsPago } = order;
-
-        // Encuentra el documento en la colección Factura donde _id coincide con idOrder
-        const facturaToUpdate = await Factura.findOne({ _id: idOrder });
-
-        if (facturaToUpdate) {
-          // Actualiza ListPago utilizando map para crear un nuevo array
-          facturaToUpdate.ListPago = facturaToUpdate.ListPago.map((pago) => {
-            if (idsPago.includes(pago._id.toString())) {
-              pago.idCuadre = cuadreUpdate._id; // Usar cuadreUpdate._id
-            }
-            return pago;
-          });
-
-          // Guarda los cambios en el documento de Factura
-          await facturaToUpdate.save();
-        }
-      })
-    );
-
-    await Promise.all(
-      gastos.map(async (idGasto) => {
-        await Gasto.findByIdAndUpdate(idGasto, { idCuadre: cuadreUpdate._id });
-      })
-    );
-
-    await Promise.all(
-      deliverys.map(async (idDelivery) => {
-        await Delivery.findByIdAndUpdate(idDelivery, {
-          idCuadre: cuadreUpdate._id,
-        });
-      })
-    );
 
     // res.json({ ...cuadreUpdate, infoUser: await handleGetInfoUser(cuadreUpdate.userID), userID: undefined });
     res.json("Actualizacion Exitosa");
@@ -215,46 +132,178 @@ router.get("/get-cuadre/last", async (req, res) => {
   }
 });
 
+async function obtenerInformacionDetallada(listCuadres) {
+  try {
+    for (let cuadre of listCuadres) {
+      cuadre.Pagos = await Promise.all(
+        cuadre.Pagos.map(async (pagoId) => {
+          const pago = await Pagos.findById(pagoId, {
+            total: 1,
+            metodoPago: 1,
+            idOrden: 1,
+            idUser: 1,
+          });
+          const factura = await Factura.findById(pago.idOrden, {
+            codRecibo: 1,
+            Nombre: 1,
+            Modalidad: 1,
+          });
+          return {
+            _id: pagoId,
+            orden: factura.codRecibo,
+            nombre: factura.Nombre,
+            total: pago.total,
+            metodoPago: pago.metodoPago,
+            Modalidad: factura.Modalidad,
+            idUser: pago.idUser,
+          };
+        })
+      );
+      cuadre.Gastos = await Promise.all(
+        cuadre.Gastos.map(async (gastoId) => {
+          const gasto = await Gasto.findById(gastoId, {
+            date: 1,
+            motivo: 1,
+            tipo: 1,
+            monto: 1,
+            idUser: 1,
+          });
+
+          return {
+            _id: gastoId,
+            tipo: gasto.tipo,
+            date: gasto.date,
+            motivo: gasto.motivo,
+            monto: gasto.monto,
+            idUser: gasto.idUser,
+          };
+        })
+      );
+      const iUser = await handleGetInfoUser(cuadre.userID); // Suponiendo que tienes una función handleGetInfoUser para obtener información de usuario
+      cuadre.infoUser = iUser;
+      cuadre.userID = undefined;
+    }
+    return listCuadres;
+  } catch (error) {
+    console.error("Error al obtener información detallada:", error);
+    throw new Error("Error al obtener información detallada");
+  }
+}
+
+const handleGetMovimientosNCuadre = async (date, listCuadres) => {
+  // Mapear y obtener los arrays de pagos y gastos de cada documento
+  const IdsPagos = [].concat(
+    ...listCuadres.map((cuadre) => cuadre.Pagos.map((pago) => pago._id))
+  );
+  const IdsGastos = [].concat(
+    ...listCuadres.map((cuadre) => cuadre.Gastos.map((gasto) => gasto._id))
+  );
+
+  // Obtener todos los pagos en la fecha especificada
+  const listPagos = await Pagos.aggregate([
+    {
+      $match: { "date.fecha": date, isCounted: { $ne: false } },
+    },
+    {
+      $lookup: {
+        from: "facturas",
+        let: { idOrden: "$idOrden" }, // Guardamos idOrden como es
+        pipeline: [
+          {
+            $addFields: {
+              // Convertimos _id a String
+              _idToString: { $toString: "$_id" },
+            },
+          },
+          {
+            $match: {
+              // Comparamos idOrden con _id convertido a String
+              $expr: { $eq: ["$$idOrden", "$_idToString"] },
+            },
+          },
+        ],
+        as: "factura",
+      },
+    },
+    {
+      $unwind: "$factura", // Desenrollar el array "factura"
+    },
+    {
+      $project: {
+        // Proyectar solo los campos necesarios de la factura
+        _id: "$_id",
+        idUser: "$idUser",
+        orden: "$factura.codRecibo",
+        idOrden: "$idOrden",
+        date: "$date",
+        nombre: "$factura.Nombre",
+        total: "$total",
+        metodoPago: "$metodoPago",
+        Modalidad: "$factura.Modalidad",
+      },
+    },
+  ]);
+
+  // Obtener todos los gastos en la fecha especificada
+  const listGastos = await Gasto.find({
+    "date.fecha": date,
+  }).lean();
+
+  // Crear un conjunto de IDs para una búsqueda más eficiente
+  const setIDsPagos = new Set(IdsPagos);
+
+  const setIDsGastos = new Set(IdsGastos);
+
+  // Filtrar y obtener los pagos que no se encuentren en IDsPagos
+
+  const pagosNCuadre = await Promise.all(
+    listPagos
+      .filter((pago) => !setIDsPagos.has(pago._id.toString()))
+      .map(async (pago) => {
+        return {
+          ...pago,
+          infoUser: await handleGetInfoUser(pago.idUser),
+        };
+      })
+  );
+
+  // Filtrar y obtener los gastos que no se encuentren en IdsGastos
+
+  const gastosNCuadre = await Promise.all(
+    listGastos
+      .filter((gasto) => !setIDsGastos.has(gasto._id.toString()))
+      .map(async (gasto) => {
+        return {
+          ...gasto,
+          infoUser: await handleGetInfoUser(gasto.idUser),
+        };
+      })
+  );
+
+  return { pagosNCuadre, gastosNCuadre };
+};
+
 router.get("/get-cuadre/:idUsuario/:datePrincipal", async (req, res) => {
   try {
     const { idUsuario, datePrincipal } = req.params;
 
-    // 1. Buscar por la fecha dada.
-    let listCuadres = await CuadreDiario.find({
-      "date.fecha": datePrincipal,
-    }).lean();
-
-    // 2. Encontrar el último cuadre de toda la colección.
+    // 1. Encontrar el último cuadre de toda la colección.
     let lastCuadre = await CuadreDiario.findOne().sort({ index: -1 }).lean();
 
-    // 3. Enriquecer el último cuadre con la información del usuario.
-    if (lastCuadre) {
-      const iUser = await handleGetInfoUser(lastCuadre.userID);
-      lastCuadre = {
-        ...lastCuadre,
-        infoUser: iUser,
-        userID: undefined,
-      };
-    }
+    // 2. Buscar por la fecha dada.
+    let listCuadres = await CuadreDiario.find({
+      "date.fecha": datePrincipal,
+      // _id: { $ne: lastCuadre._id }, // Excluimos el _id de lastCuadre
+    }).lean();
 
-    // 4. Enriquecer cada elemento de listCuadres con la información del usuario.
-    if (listCuadres.length > 0) {
-      const userInfos = await Promise.all(
-        listCuadres.map(async (cuadre) => {
-          const userInfo = await handleGetInfoUser(cuadre.userID);
-          return userInfo;
-        })
-      );
+    listCuadres = await obtenerInformacionDetallada(listCuadres);
+    lastCuadre = await obtenerInformacionDetallada([lastCuadre]);
+    lastCuadre = lastCuadre.length === 1 ? lastCuadre[0] : null;
 
-      listCuadres = listCuadres.map((cuadre, index) => {
-        const iUser = userInfos[index];
-        return { ...cuadre, infoUser: iUser, userID: undefined };
-      });
-    }
+    const dPrincipal = moment(datePrincipal, "YYYY-MM-DD");
 
-    // 5. Agregar atributo 'enable' a cada elemento de listCuadres.
+    // 3. Agregar atributo 'enable' a cada elemento de listCuadres.
     if (listCuadres.length > 0 && lastCuadre) {
-      const dPrincipal = moment(datePrincipal, "YYYY-MM-DD");
       const dLastCuadre = moment(lastCuadre.date.fecha, "YYYY-MM-DD");
       listCuadres = listCuadres.map((elemento) => {
         if (
@@ -288,49 +337,27 @@ router.get("/get-cuadre/:idUsuario/:datePrincipal", async (req, res) => {
       },
       egresos: {
         gastos: "",
-        delivery: "",
       },
       notas: [],
       infoUser: await handleGetInfoUser(idUsuario),
+      Pagos: [],
+      Gastos: [],
     };
 
     let cuadreActual = infoBase;
 
     if (lastCuadre) {
-      const dPrincipal = moment(datePrincipal, "YYYY-MM-DD");
       const dLastCuadre = moment(lastCuadre.date.fecha, "YYYY-MM-DD");
-      if (listCuadres.length > 0) {
-        if (dPrincipal.isSame(dLastCuadre)) {
-          if (idUsuario === lastCuadre.infoUser._id.toString()) {
-            cuadreActual = {
-              ...lastCuadre,
-              type: "update",
-              enable: false,
-              saved: true,
-            };
-          } else {
-            cuadreActual = {
-              ...cuadreActual,
-              cajaInicial: lastCuadre.cajaFinal,
-              type: "new",
-              enable: false,
-              saved: false,
-            };
-          }
+      // =
+      if (dPrincipal.isSame(dLastCuadre)) {
+        if (idUsuario === lastCuadre.infoUser._id.toString()) {
+          cuadreActual = {
+            ...lastCuadre,
+            type: "update",
+            enable: false,
+            saved: true,
+          };
         } else {
-          if (dPrincipal.isBefore(dLastCuadre)) {
-            // <
-            cuadreActual = {
-              ...listCuadres[listCuadres.length - 1],
-              type: "view",
-              enable: true,
-              saved: true,
-            };
-          }
-        }
-      } else {
-        if (dPrincipal.isAfter(dLastCuadre)) {
-          // >
           cuadreActual = {
             ...cuadreActual,
             cajaInicial: lastCuadre.cajaFinal,
@@ -339,21 +366,32 @@ router.get("/get-cuadre/:idUsuario/:datePrincipal", async (req, res) => {
             saved: false,
           };
         }
-        if (dPrincipal.isBefore(dLastCuadre)) {
-          // <
-          cuadreActual = {
-            ...cuadreActual,
-            type: "view",
-            enable: true,
-            saved: false,
-          };
-        }
+      } else if (dPrincipal.isBefore(dLastCuadre)) {
+        // <
+        cuadreActual = {
+          ...listCuadres[listCuadres.length - 1],
+          type: "view",
+          enable: true,
+          saved: true,
+        };
+      } else if (dPrincipal.isAfter(dLastCuadre)) {
+        // >
+        cuadreActual = {
+          ...cuadreActual,
+          cajaInicial: lastCuadre.cajaFinal,
+          type: "new",
+          enable: false,
+          saved: false,
+        };
       }
     }
 
-    const paysNCuadrados = await getNewStructure(datePrincipal);
-    const gastoNCuadrados = await GetGastosNCuadre(datePrincipal);
-    const deliveryNCuadrados = await GetDeliveriesNCuadre(datePrincipal);
+    const MovimientosNCuadre = await handleGetMovimientosNCuadre(
+      datePrincipal,
+      listCuadres
+    );
+
+    let { pagosNCuadre, gastosNCuadre } = MovimientosNCuadre;
 
     res.json({
       listCuadres: listCuadres ? listCuadres : [],
@@ -362,16 +400,10 @@ router.get("/get-cuadre/:idUsuario/:datePrincipal", async (req, res) => {
         : null,
       cuadreActual: cuadreActual,
       infoBase,
-      registroNoCuadrados:
-        paysNCuadrados.length > 0 ||
-        gastoNCuadrados.length > 0 ||
-        deliveryNCuadrados > 0
-          ? {
-              pagos: paysNCuadrados,
-              gastos: gastoNCuadrados,
-              delivery: deliveryNCuadrados,
-            }
-          : null,
+      registroNoCuadrados: {
+        pagos: pagosNCuadre.length ? pagosNCuadre : [],
+        gastos: gastosNCuadre.length ? gastosNCuadre : [],
+      },
     });
   } catch (error) {
     console.error(error);
@@ -418,171 +450,6 @@ const handleGetListFechas = (date) => {
   return fechas.filter((fecha) => moment(fecha).month() === inputDate.month());
 };
 
-const AgruparPagosByMetodo = (pagos) => {
-  const resultado = {};
-
-  pagos.forEach(({ _id, metodoPago, total, ...resto }) => {
-    const clave = `${_id}-${metodoPago}`;
-
-    if (!resultado[clave]) {
-      resultado[clave] = {
-        _id,
-        metodoPago,
-        total,
-        ...resto,
-      };
-    } else {
-      resultado[clave].total += total;
-    }
-  });
-
-  return Object.values(resultado).map(({ idPago, ...resto }) => resto);
-};
-
-const GetPagosNCuadre = async (orders, fechaPrincipal) => {
-  const pagos = [];
-  let index = 0;
-
-  for (const order of orders) {
-    if (order.Pago !== "Pendiente") {
-      for (const pago of order.ListPago) {
-        const esPagoValido =
-          (order.modeRegistro !== "antiguo" &&
-            pago.date.fecha === fechaPrincipal) ||
-          (order.modeRegistro === "antiguo" &&
-            pago.date.fecha !== order.dateRecepcion.fecha &&
-            pago.date.fecha === fechaPrincipal);
-
-        if (esPagoValido) {
-          const iUser = await Usuario.findById(pago.idUser).exec();
-
-          if (iUser) {
-            const infoUsuario = iUser.toObject();
-            pagos.push({
-              index: index++,
-              _id: order._id,
-              idPago: pago._id,
-              codRecibo: order.codRecibo,
-              Modalidad: order.Modalidad,
-              fecha: pago.date.fecha,
-              hora: pago.date.hora,
-              estadoPrenda: order.estadoPrenda,
-              metodoPago: pago.metodoPago,
-              Nombre: order.Nombre,
-              total: pago.total,
-              infoUser: {
-                _id: infoUsuario._id.toString(),
-                name: infoUsuario.name,
-                rol: infoUsuario.rol,
-              },
-              idCuadre: pago.idCuadre,
-            });
-          }
-        }
-      }
-    }
-  }
-
-  // Esperar a que todos los pagos sean procesados
-  // La siguiente línea asume que tienes una función AgruparPagosByMetodo que procesa los pagos no cuadrados
-  const pagosNoCuadrados = pagos.filter(
-    (pago) => pago.idCuadre === "" && pago.estadoPrenda !== "anulado"
-  );
-  const res = await AgruparPagosByMetodo(pagosNoCuadrados);
-
-  return res;
-};
-
-async function getNewStructure(dateCuadre) {
-  const facturas = await Factura.find({
-    Pago: { $ne: "Pendiente" },
-    "ListPago.date.fecha": dateCuadre,
-  });
-
-  const paysNCuadrados = await GetPagosNCuadre(facturas, dateCuadre);
-
-  return paysNCuadrados;
-}
-
-const GetGastosNCuadre = async (dateCuadre) => {
-  const gastosNCuadrados = await Gasto.find({
-    fecha: dateCuadre,
-    idCuadre: "",
-  });
-  // Mapear cada gasto a una nueva estructura incluyendo la información del usuario
-  const gastosConInfoUsuario = await Promise.all(
-    gastosNCuadrados.map(async (gasto) => {
-      // Buscar información del usuario correspondiente al gasto
-      const usuario = await Usuario.findById(gasto.idUser).exec();
-
-      // Transformar la información a la estructura deseada
-      return {
-        _id: gasto._id,
-        fecha: gasto.fecha,
-        hora: gasto.hora,
-        descripcion: gasto.descripcion,
-        monto: gasto.monto,
-        infoUser: {
-          _id: usuario._id,
-          name: usuario.name,
-          rol: usuario.rol,
-        },
-      };
-    })
-  );
-
-  return gastosConInfoUsuario;
-};
-
-const GetDeliveriesNCuadre = async (dateCuadre) => {
-  // Buscar deliveries sin cuadre para la fecha especificada
-  const deliveriesNCuadrados = await Delivery.find({
-    fecha: dateCuadre,
-    idCuadre: "",
-  });
-
-  // Mapear cada delivery a una nueva estructura incluyendo la información del usuario
-  const deliveriesConInfoUsuario = await Promise.all(
-    deliveriesNCuadrados.map(async (delivery) => {
-      const orderByDelivery = GetOrderId(delivery.idCliente);
-
-      if (orderByDelivery?.estadoPrenda === "anulado") {
-        const infoAnulacion = await GetAnuladoId(orderByDelivery._id);
-
-        if (
-          infoAnulacion.fecha === delivery.fecha &&
-          delivery.idCuadre === ""
-        ) {
-          return null; // Omitir este delivery
-        }
-      }
-      // Buscar información del usuario correspondiente al delivery
-      const usuario = await Usuario.findById(delivery.idUser).exec();
-
-      // Transformar la información a la estructura deseada
-      return {
-        _id: delivery._id,
-        fecha: delivery.fecha,
-        hora: delivery.hora,
-        descripcion: delivery.descripcion,
-        monto: delivery.monto,
-        infoUser: {
-          _id: usuario._id,
-          name: usuario.name,
-          rol: usuario.rol,
-        },
-      };
-    })
-  );
-
-  // Filtrar los deliveries para eliminar los que se han omitido
-  const deliveriesFiltrados = deliveriesConInfoUsuario.filter(
-    (delivery) => delivery !== null
-  );
-
-  return deliveriesFiltrados;
-};
-
 router.get("/get-list-cuadre/mensual/:date", async (req, res) => {
   try {
     const { date } = req.params;
@@ -592,11 +459,15 @@ router.get("/get-list-cuadre/mensual/:date", async (req, res) => {
     const resultadosPorFecha = await Promise.all(
       listaFechas.map(async (fecha) => {
         // Para cada fecha, obtener la estructura nueva y los cuadres diarios
-        const paysNCuadrados = await getNewStructure(fecha);
         const cuadreDiarios = await CuadreDiario.find({ "date.fecha": fecha });
-        const gastoNCuadrados = await GetGastosNCuadre(fecha);
-        const deliveryNCuadrados = await GetDeliveriesNCuadre(fecha);
-        const gastoGeneral = [...gastoNCuadrados, ...deliveryNCuadrados];
+        const listCuadres = await obtenerInformacionDetallada(cuadreDiarios);
+        const MontoNCuadrados = await handleGetMovimientosNCuadre(
+          fecha,
+          listCuadres
+        );
+        const { pagosNCuadre, gastosNCuadre } = MontoNCuadrados;
+        const paysNCuadrados = pagosNCuadre;
+        const gastoGeneral = gastosNCuadre;
 
         // Procesar cada cuadre diario para esa fecha
         const cuadresTransformados = await Promise.all(
@@ -610,16 +481,6 @@ router.get("/get-list-cuadre/mensual/:date", async (req, res) => {
 
             // Remover el atributo Montos
             delete cuadre.Montos;
-
-            // Obtener información del usuario
-            const userInfo = await Usuario.findOne(
-              { _id: cuadre.userID },
-              { name: 1, _id: 1, rol: 1 }
-            );
-
-            // Reemplazar userID con infoUser
-            cuadre.infoUser = userInfo;
-            delete cuadre.userID;
 
             // Agregar montoCaja
             cuadre.montoCaja = montoCaja;

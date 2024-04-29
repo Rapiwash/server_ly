@@ -1,4 +1,4 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const cuadreDiarioSchema = new mongoose.Schema(
   {
@@ -14,13 +14,15 @@ const cuadreDiarioSchema = new mongoose.Schema(
     corte: String,
     cajaFinal: String,
     ingresos: Object,
-    egresos: Object,
+    egresos: String,
     notas: [],
     userID: String,
+    Pagos: [],
+    Gastos: [],
   },
-  { collection: 'CuadreDiario' }
+  { collection: "CuadreDiario" }
 );
 
-const CuadreDiario = mongoose.model('CuadreDiario', cuadreDiarioSchema);
+const CuadreDiario = mongoose.model("CuadreDiario", cuadreDiarioSchema);
 
 export default CuadreDiario;

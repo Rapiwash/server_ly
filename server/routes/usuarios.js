@@ -12,13 +12,17 @@ import {
   verifyCodigo,
   verifyToken,
 } from "../middleware/middleware.js";
-import { secretKey } from "../utils/varsGlobal.js";
+import { secretKey, emailBusiness, passBusiness } from "../utils/varsGlobal.js";
+import {
+  activeAccount,
+  recoveryPassword,
+} from "../models/usuarios/designEmail/activeAccount.js";
 
 const transporter = nodemailer.createTransport({
   service: "Gmail",
   auth: {
-    user: "jose.poma1001g@gmail.com",
-    pass: "lmmspgkfbowlxgzb",
+    user: emailBusiness,
+    pass: passBusiness,
   },
 });
 
@@ -84,20 +88,40 @@ async function _CodFirstRegistro(usuario) {
     });
 
     await nuevoCodigo.save();
-    await enviarCorreo(usuario?.email, codigo);
+    await enviarCorreo(usuario?.email, activeAccount(codigo), "active");
     return codigo;
   } catch (error) {
     throw new Error(`Error al generar y guardar el código único: ${error}`);
   }
 }
 
-async function enviarCorreo(destinatario, codigo) {
+async function enviarCorreo(destinatario, _html, type) {
+  const rootImgs = "./server/models/usuarios/designEmail/images";
   try {
     const mailOptions = {
-      from: "Sistema Lavanderia",
+      from: emailBusiness,
       to: destinatario,
       subject: "Código de verificación",
-      text: `Tu código de verificación es: ${codigo}`,
+      // text: `Tu código de verificación es: ${codigo}`,
+      html: _html, // Cambiado de 'text' a 'html'
+      attachments: [
+        {
+          filename: "footer.png",
+          path: `${rootImgs}/footer.png`,
+          cid: "footer",
+        },
+        type === "recover"
+          ? {
+              filename: "recover.png",
+              path: `${rootImgs}/recover.png`,
+              cid: "recover",
+            }
+          : {
+              filename: "activate.png",
+              path: `${rootImgs}/activate.png`,
+              cid: "activate",
+            },
+      ],
     };
 
     await transporter.sendMail(mailOptions);
@@ -136,7 +160,11 @@ router.post("/send-cod-reset-password", async (req, res) => {
 
     if (usuarioEncontrado) {
       const codigo = await _CodResetPassword(usuarioEncontrado._id);
-      await enviarCorreo(usuarioEncontrado.email, codigo);
+      await enviarCorreo(
+        usuarioEncontrado.email,
+        recoveryPassword(codigo),
+        "recover"
+      );
       res.status(200).send(usuarioEncontrado);
     } else {
       res
@@ -177,10 +205,14 @@ router.get("/resend-code/:id", async (req, res) => {
     if (!userCode) {
       const nuevoCodigo = await _CodFirstRegistro(usuario);
       // Envía el código al correo del usuario
-      await enviarCorreo(usuario.email, nuevoCodigo);
+      await enviarCorreo(usuario.email, activeAccount(nuevoCodigo), "active");
     } else {
       // Si se encuentra un código, envíalo al correo del usuario
-      await enviarCorreo(usuario.email, userCode.codigo);
+      await enviarCorreo(
+        usuario.email,
+        activeAccount(userCode.codigo),
+        "active"
+      );
     }
 
     res.json("Envio Exitoso");
@@ -224,7 +256,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ mensaje: "Contraseña incorrecta" });
     }
 
-    if (user.state === "inactivo") {
+    if (user._validate === false) {
       return res
         .status(200)
         .json({ type: "validate", info: user._id, id: user._id });
@@ -435,27 +467,6 @@ router.put("/recover-password/:id", verifyCodigo, async (req, res) => {
     res.status(500).json({ mensaje: "Error establecer nueva contrsaña" });
   }
 });
-
-// // Ruta para cerrar sesión
-// router.delete("/logout", async (req, res) => {
-//   const { token } = req.body; // Obtiene el token desde el cuerpo de la solicitud
-//   console.log(token);
-//   try {
-//     // Busca y elimina el documento en la colección Accesos basado en el token
-//     const resultado = await Accesos.deleteOne({ tokens: token });
-//     console.log(resultado);
-//     if (resultado.deletedCount === 1) {
-//       // Si se eliminó un documento, se considera una sesión cerrada con éxito
-//       res.status(200).send("Sesión cerrada con éxito");
-//     } else {
-//       // Si no se encontró un documento con el token proporcionado, se puede manejar de acuerdo a tus necesidades
-//       res.status(404).send("No se encontró la sesión");
-//     }
-//   } catch (error) {
-//     console.error("Error al cerrar la sesión:", error);
-//     res.status(500).send("Error al cerrar la sesión");
-//   }
-// });
 
 // Ruta para obtener todos los usuarios
 router.get("/get-list-users", async (req, res) => {

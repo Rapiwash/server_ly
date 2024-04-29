@@ -25,19 +25,7 @@ const facturaSchema = new mongoose.Schema({
     },
   ],
   celular: String,
-  Pago: String,
-  ListPago: [
-    {
-      date: {
-        fecha: String,
-        hora: String,
-      },
-      metodoPago: String,
-      total: Number,
-      idUser: String,
-      idCuadre: String,
-    },
-  ],
+  direccion: String,
   datePrevista: {},
   dateEntrega: {},
   descuento: String,
