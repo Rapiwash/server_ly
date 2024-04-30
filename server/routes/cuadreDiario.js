@@ -297,8 +297,12 @@ router.get("/get-cuadre/:idUsuario/:datePrincipal", async (req, res) => {
     }).lean();
 
     listCuadres = await obtenerInformacionDetallada(listCuadres);
-    lastCuadre = await obtenerInformacionDetallada([lastCuadre]);
-    lastCuadre = lastCuadre.length === 1 ? lastCuadre[0] : null;
+    if (lastCuadre !== null) {
+      const [infoDetailLastCuadre] = await obtenerInformacionDetallada([
+        lastCuadre,
+      ]);
+      lastCuadre = infoDetailLastCuadre;
+    }
 
     const dPrincipal = moment(datePrincipal, "YYYY-MM-DD");
 
@@ -368,12 +372,21 @@ router.get("/get-cuadre/:idUsuario/:datePrincipal", async (req, res) => {
         }
       } else if (dPrincipal.isBefore(dLastCuadre)) {
         // <
-        cuadreActual = {
-          ...listCuadres[listCuadres.length - 1],
-          type: "view",
-          enable: true,
-          saved: true,
-        };
+        if (listCuadres.length > 0) {
+          cuadreActual = {
+            ...listCuadres[listCuadres.length - 1],
+            type: "view",
+            enable: true,
+            saved: true,
+          };
+        } else {
+          cuadreActual = {
+            ...cuadreActual,
+            type: "view",
+            enable: true,
+            saved: false,
+          };
+        }
       } else if (dPrincipal.isAfter(dLastCuadre)) {
         // >
         cuadreActual = {
