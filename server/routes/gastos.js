@@ -67,7 +67,11 @@ router.post("/add-gasto", openingHours, (req, res) => {
 router.get("/get-gastos/:fecha", async (req, res) => {
   try {
     const fecha = req.params.fecha;
-    const mes = moment(fecha).format("MM");
+
+    // Parsear la fecha usando Moment.js
+    const momentFecha = moment(fecha, "YYYY-MM-DD");
+    const inicioMes = moment(momentFecha).startOf("month").format("YYYY-MM-DD");
+    const finMes = moment(momentFecha).endOf("month").format("YYYY-MM-DD");
 
     // Consultar todos los tipos de gastos
     const tiposGastos = await TipoGasto.find();
@@ -76,7 +80,10 @@ router.get("/get-gastos/:fecha", async (req, res) => {
     const gastosAggregate = await Gasto.aggregate([
       {
         $match: {
-          "date.fecha": { $regex: `-${mes}-` },
+          "date.fecha": {
+            $gte: inicioMes,
+            $lte: finMes,
+          },
         },
       },
       {
@@ -141,21 +148,6 @@ router.get("/get-gastos/:fecha", async (req, res) => {
     console.error(error);
     res.status(500).json({ message: "Error interno del servidor" });
   }
-});
-
-router.get("/get-gastos/:fecha", (req, res) => {
-  const { fecha } = req.params;
-
-  // Proyectar solo los campos deseados usando el método select
-  Gasto.find({ "date.fecha": fecha })
-    .select("tipo date motivo monto idUser") // Seleccionar los campos específicos
-    .then((infoGastos) => {
-      res.json(infoGastos);
-    })
-    .catch((error) => {
-      console.error("Error al obtener los datos:", error);
-      res.status(500).json({ mensaje: "Error al obtener los datos" });
-    });
 });
 
 // Ruta para eliminar un gasto por su ID
