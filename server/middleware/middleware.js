@@ -4,7 +4,7 @@ import PasswordResetCodes from "../models/usuarios/passwordResetCodes.js";
 import Negocio from "../models/negocio.js";
 import jwt from "jsonwebtoken";
 import moment from "moment";
-import { secretKey, timeZone } from "../utils/varsGlobal.js";
+import { secretKey } from "../utils/varsGlobal.js";
 
 // Middleware para verificar el token y la existencia en la colección Accesos
 export const verifyToken = async (req, res, next) => {
@@ -74,40 +74,29 @@ export const openingHours = async (req, res, next) => {
   }
 
   const negocio = await Negocio.findOne(); // Obtén el documento de negocio (ajusta esto según tu aplicación)
-  const { estado, horario } = negocio;
-  const { dias, horas } = horario;
-  if (estado) {
+  const { funcionamiento } = negocio;
+  const { actividad, horas } = funcionamiento;
+  if (actividad) {
     if (rol === "coord" || rol === "pers") {
-      const currentDay = moment().isoWeekday(); // Obtén el día de la semana actual (1 para lunes, 2 para martes, etc.)
       const currentDate = moment(); // Obtén la hora actual como objeto Moment
 
-      if (dias.includes(currentDay)) {
-        const [inicioHora, inicioMinuto] = horas.inicio.split(":");
-        const [finHora, finMinuto] = horas.fin.split(":");
+      const [inicioHora, inicioMinuto] = horas.inicio.split(":");
+      const [finHora, finMinuto] = horas.fin.split(":");
 
-        const startTime = currentDate
-          .clone()
-          .set({ hour: inicioHora, minute: inicioMinuto })
-          .subtract(4, "hour");
-        const endTime = currentDate
-          .clone()
-          .set({ hour: finHora, minute: finMinuto })
-          .add(4, "hour");
+      const startTime = currentDate
+        .clone()
+        .set({ hour: inicioHora, minute: inicioMinuto });
+      const endTime = currentDate
+        .clone()
+        .set({ hour: finHora, minute: finMinuto });
 
-        // Verificar si la hora actual está entre la hora de inicio y fin
-        if (moment(currentDate, "HH:mm").isBetween(startTime, endTime)) {
-          next();
-          return;
-        } else {
-          res.status(403).json({
-            mensaje: "Se encuentra fuera del Horario de Atencion",
-            type: "outTime",
-          });
-        }
+      // Verificar si la hora actual está entre la hora de inicio y fin
+      if (moment(currentDate, "HH:mm").isBetween(startTime, endTime)) {
+        next();
+        return;
       } else {
-        // Enviar respuesta si el día no está permitido
         res.status(403).json({
-          mensaje: "Se encuentra fuera de Dias Laborables",
+          mensaje: "Se encuentra fuera del Horario de Atencion",
           type: "outTime",
         });
       }
@@ -120,7 +109,14 @@ export const openingHours = async (req, res, next) => {
         .json({ mensaje: "El rol obtenido no cumple ninguna funcion" });
     }
   } else {
-    res.status(403).json({ mensaje: "Cierre de Emergencia", type: "locking" });
+    if (rol === "admin") {
+      next();
+      return;
+    } else {
+      res
+        .status(403)
+        .json({ mensaje: "Cierre de Emergencia", type: "locking" });
+    }
   }
 };
 

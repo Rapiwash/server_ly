@@ -14,21 +14,31 @@ router.get("/get-info-negocio", async (req, res) => {
     } else {
       // Si no se encuentra ningún registro, crea uno en base al modelo y responde con él
       const nuevoNegocio = new Negocio({
-        name: "Haibor",
+        name: "EsKala",
         direccion: "av. unknown 123",
-        numero: {
-          info: "123456789",
-          state: true,
-        },
-        estado: true,
-        itemsAtajos: [],
-        horario: {
-          dias: [1, 2, 3, 4, 5, 6],
-          horas: {
-            inicio: "08:00",
-            fin: "18:00",
+        contacto: [
+          {
+            numero: "123456789",
+            index: 0,
           },
+        ],
+        itemsAtajos: [],
+        itemsInformeDiario: [],
+        rolQAnulan: ["gerente", "admin", "coord"],
+        funcionamiento: {
+          horas: {
+            inicio: "06:00",
+            fin: "20:00",
+          },
+          actividad: true,
         },
+        horario: [
+          {
+            horario: "Lun a Dom - 06:00 AM a 08:00 PM",
+            index: 1,
+          },
+        ],
+        oldOrder: true,
       });
 
       await nuevoNegocio.save();
@@ -40,10 +50,6 @@ router.get("/get-info-negocio", async (req, res) => {
     console.error(error);
     return res.status(500).json({ error: "Error en el servidor" });
   }
-
-  // setTimeout(() => {
-  //   return res.status(500).json({ error: 'Error en el servidor' });
-  // }, 10000);
 });
 
 router.put("/update-info-negocio", async (req, res) => {

@@ -58,20 +58,13 @@ io.on("connection", (socket) => {
 
   // Maneja eventos cuando el cliente envía un mensaje
   socket.on("client:newOrder", (info) => {
-    const { newOrder } = info;
-    if ("newDelivery" in info) {
-      const { newDelivery } = info;
-      socket.broadcast.emit("server:newDelivery", newDelivery);
-    }
-
-    // Envía el mensaje a todos los clientes conectados
-    if ("newCodigo" in info) {
-      const { newCodigo } = info;
-      io.emit("server:newCodigo", newCodigo);
-    }
-
-    socket.broadcast.emit("server:newOrder", newOrder);
+    socket.broadcast.emit("server:newOrder", info);
   });
+
+  socket.on("client:updateCodigo", (info) => {
+    io.emit("server:updateCodigo", info);
+  });
+
   socket.on("client:updateOrder", (info) => {
     const { orderUpdated } = info;
 
@@ -206,5 +199,25 @@ app.use("/api/lava-ya/", asistenciaRoutes);
 // Personal
 app.use("/api/lava-ya/", personalRoutes);
 
-server.listen(PORT);
-console.log("Server Iniciado en puerto: " + PORT);
+server.listen(PORT, () => {
+  console.log("Server Iniciado en puerto: " + PORT);
+});
+
+app.get("/", (req, res) => {
+  // Aquí puedes definir el HTML que quieres enviar como respuesta
+  const htmlResponse = `
+    <html>
+      <head>
+        <title>Estado del Servidor</title>
+      </head>
+      <body>
+        <h1>Estado del Servidor</h1>
+        Aveces
+        <p>El servidor está funcionando correctamente.</p>
+      </body>
+    </html>
+  `;
+
+  // Envía el HTML como respuesta
+  res.send(htmlResponse);
+});

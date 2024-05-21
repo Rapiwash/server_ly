@@ -70,15 +70,12 @@ router.post("/add-factura", openingHours, async (req, res) => {
   try {
     const { infoOrden, infoPago } = req.body;
     const {
-      codRecibo,
       dateRecepcion,
       Modalidad,
       Nombre,
       Items,
       celular,
       direccion,
-      // Pago,
-      // ListPago,
       datePrevista,
       dateEntrega,
       descuento,
@@ -98,7 +95,7 @@ router.post("/add-factura", openingHours, async (req, res) => {
     } = infoOrden;
 
     // Consultar el último registro ordenado por el campo 'index' de forma descendente
-    const ultimoRegistro = await Factura.findOne().sort({ index: -1 }).exec();
+    const ultimoRegistro = await Factura.findOne().sort({ index: -1 }).lean();
 
     // Obtener el último índice utilizado o establecer 0 si no hay registros
     const ultimoIndice = ultimoRegistro ? ultimoRegistro.index : 0;
@@ -106,44 +103,23 @@ router.post("/add-factura", openingHours, async (req, res) => {
     // Crear el nuevo índice incrementando el último índice en 1
     const nuevoIndice = ultimoIndice + 1;
 
-    let updatedCod;
-    if (modeRegistro === "nuevo") {
-      // Tu lógica para actualizar el código de factura
-      updatedCod = await codFactura.findOneAndUpdate(
-        {},
-        { $inc: { codActual: 1 } },
-        { new: true, session: session }
-      );
-
-      if (updatedCod) {
-        if (updatedCod.codActual > updatedCod.codFinal) {
-          updatedCod.codActual = 1;
-          await updatedCod.save({ session: session });
-        }
-      } else {
-        return res
-          .status(404)
-          .json({ mensaje: "Código de factura no encontrado" });
-      }
-    }
-
     const dateCreation = {
       fecha: moment().format("YYYY-MM-DD"),
       hora: moment().format("HH:mm"),
     };
 
+    const codigoActual = await codFactura.findOne().sort({ _id: -1 }).lean();
+
     // Crear el nuevo registro con el índice asignado
     const nuevoDato = new Factura({
       dateCreation,
-      codRecibo,
+      codRecibo: codigoActual.codActual,
       dateRecepcion,
       Modalidad,
       Nombre,
       Items,
       celular,
       direccion,
-      // Pago,
-      // ListPago,
       datePrevista,
       dateEntrega,
       descuento,
@@ -166,26 +142,47 @@ router.post("/add-factura", openingHours, async (req, res) => {
     });
 
     // Guardar el nuevo registro en la base de datos
-    const fSaved = await nuevoDato.save({ session: session });
+    const fSaved = await nuevoDato.save({ session });
+
+    let updatedCod;
+    if (modeRegistro === "nuevo") {
+      // Incrementa el valor de codActual en 1 y devuelve el documento actualizado
+      updatedCod = await codFactura.findOneAndUpdate(
+        {},
+        { $inc: { codActual: 1 } },
+        { new: true, session }
+      );
+
+      // Si el valor de codActual supera el valor de codFinal, reinicia codActual a 1
+      if (updatedCod && updatedCod.codActual > updatedCod.codFinal) {
+        updatedCod.codActual = 1;
+        await updatedCod.save({ session });
+      }
+
+      // Si no se encuentra el documento actualizado, devuelve un error
+      if (!updatedCod) {
+        return res
+          .status(404)
+          .json({ mensaje: "Código de factura no encontrado" });
+      }
+    }
+
     let facturaGuardada = fSaved.toObject();
 
     const lPagos = [];
     if (infoPago.length > 0) {
-      // Utilizamos Promise.all para ejecutar las operaciones asíncronas en paralelo
       await Promise.all(
         infoPago.map(async (pago) => {
           const newIPago = await handleAddPago({
             ...pago,
             idOrden: facturaGuardada._id,
           });
-
           lPagos.push(newIPago);
         })
       );
     }
 
     let iGasto;
-    // Verificar si la modalidad es "Delivery"
     if (infoOrden.Modalidad === "Delivery") {
       const { infoGastoByDelivery } = req.body;
       if (Object.keys(infoGastoByDelivery).length) {
@@ -195,14 +192,12 @@ router.post("/add-factura", openingHours, async (req, res) => {
 
     if (facturaGuardada.gift_promo.length > 0) {
       for (const gift of facturaGuardada.gift_promo) {
-        const codigoPromocion = gift.codigoPromocion;
-        const codigoCupon = gift.codigoCupon;
+        const { codigoPromocion, codigoCupon } = gift;
 
-        // Crear el nuevo cupón en la base de datos
         const nuevoCupon = new Cupones({
           codigoPromocion,
           codigoCupon,
-          estado: true, // Por defecto, el estado es true
+          estado: true,
           dateCreation: {
             fecha: moment().format("YYYY-MM-DD"),
             hora: moment().format("HH:mm"),
@@ -213,7 +208,7 @@ router.post("/add-factura", openingHours, async (req, res) => {
           },
         });
 
-        await nuevoCupon.save({ session: session });
+        await nuevoCupon.save({ session });
       }
     }
 
@@ -221,27 +216,23 @@ router.post("/add-factura", openingHours, async (req, res) => {
     if (
       facturaGuardada.modoDescuento === "Puntos" &&
       beneficios.puntos > 0 &&
-      facturaGuardada.dni !== ""
+      facturaGuardada.dni
     ) {
-      // Si la orden esta siendo usado en el cliente osea registrado
       const ordenUsada = await clientes.findOne({
         dni: facturaGuardada.dni,
         "infoScore.idOrdenService": facturaGuardada._id,
       });
 
-      // si no a sido registrado  pues aplicar puntos
       if (!ordenUsada) {
-        // si uso puntos es que hay cliente
         const puntosToDeduct = createPuntosObj(
           facturaGuardada,
           -beneficios.puntos
-        ); // reducir puntos al cliente
-
+        );
         const { filter, update } = puntosToDeduct;
 
         await clientes.updateOne(filter, update, {
           upsert: true,
-          session: session,
+          session,
         });
       }
     }
@@ -250,22 +241,15 @@ router.post("/add-factura", openingHours, async (req, res) => {
       facturaGuardada.modoDescuento === "Promocion" &&
       beneficios.promociones.length > 0
     ) {
-      for (const cup of beneficios.promociones) {
-        const codigoCupon = cup.codigoCupon;
-
-        // Buscar el cupón por su código
-        const cupon = await Cupones.findOne({ codigoCupon });
-
-        // Actualizar el estado del cupón a false
-        cupon.estado = false;
-
-        // Registrar la fecha y hora actual en el campo dateUse
-        cupon.dateUse.fecha = moment().format("YYYY-MM-DD");
-        cupon.dateUse.hora = moment().format("HH:mm");
-
-        // Guardar los cambios en la base de datos
-        await cupon.save({ session: session });
-      }
+      await Promise.all(
+        beneficios.promociones.map(async (cup) => {
+          const cupon = await Cupones.findOne({ codigoCupon: cup.codigoCupon });
+          cupon.estado = false;
+          cupon.dateUse.fecha = moment().format("YYYY-MM-DD");
+          cupon.dateUse.hora = moment().format("HH:mm");
+          await cupon.save({ session });
+        })
+      );
     }
 
     await session.commitTransaction();
@@ -294,12 +278,14 @@ router.post("/add-factura", openingHours, async (req, res) => {
       },
       ...(finalLPagos.length > 0 && { listNewsPagos: finalLPagos }),
       ...(iGasto && { newGasto: iGasto }),
-      ...(modeRegistro === "nuevo" && { newCodigo: updatedCod.codActual }),
+      ...(updatedCod && { newCodigo: updatedCod.codActual }),
     });
   } catch (error) {
     await session.abortTransaction();
     console.error("Error al guardar los datos:", error);
     res.status(500).json({ mensaje: "Error al guardar los datos" });
+  } finally {
+    session.endSession();
   }
 });
 
@@ -415,7 +401,9 @@ router.get("/get-factura/date/:startDate/:endDate", async (req, res) => {
                 idUser: "$$pago.idUser",
                 idOrden: "$$pago.idOrden",
                 orden: "$codRecibo",
+                ordenDateCreation: "$dateCreation.fecha",
                 date: "$$pago.date",
+                isCounted: "$$pago.isCounted",
                 nombre: "$Nombre",
                 total: "$$pago.total",
                 metodoPago: "$$pago.metodoPago",

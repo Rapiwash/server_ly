@@ -487,7 +487,7 @@ router.get("/get-list-cuadre/mensual/:date", async (req, res) => {
           cuadreDiarios.map(async (cuadre) => {
             // Sumar los montos de cada cuadre
             const sumaMontos = cuadre.Montos.reduce(
-              (total, monto) => total + monto.total,
+              (total, monto) => total + +monto.total,
               0
             );
             const montoCaja = sumaMontos.toFixed(1).toString();
