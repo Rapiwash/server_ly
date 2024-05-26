@@ -39,6 +39,7 @@ router.get("/get-info-negocio", async (req, res) => {
           },
         ],
         oldOrder: true,
+        hasMobility: true,
       });
 
       await nuevoNegocio.save();

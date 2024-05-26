@@ -3,6 +3,8 @@ import Almacen from "../models/almacen.js";
 import Factura from "../models/Factura.js";
 import moment from "moment";
 import db from "../config/db.js";
+import Pagos from "../models/pagos.js";
+import { handleGetInfoUser } from "./cuadreDiario.js";
 
 const router = express.Router();
 
@@ -57,85 +59,59 @@ router.post("/add-to-warehouse", async (req, res) => {
 
 router.get("/get-warehouse-service-order", async (req, res) => {
   try {
-    const reportesFacturas = await Almacen.aggregate([
-      {
-        $unwind: "$serviceOrder", // Desenrollar el array de serviceOrder
-      },
-      {
-        $addFields: {
-          serviceOrderId: { $toObjectId: "$serviceOrder" }, // Convertir cada elemento de serviceOrder a ObjectId
-        },
-      },
-      {
-        $lookup: {
-          from: "facturas",
-          localField: "serviceOrderId",
-          foreignField: "_id",
-          as: "factura",
-        },
-      },
-      {
-        $unwind: "$factura", // Desenrollar el array de documentos de factura
-      },
-      {
-        $match: {
-          "factura.estadoPrenda": "pendiente", // Filtrar las facturas con estado pendiente
-        },
-      },
-      {
-        $addFields: {
-          factura: {
-            $mergeObjects: ["$factura", { dateStorage: "$storageDate" }],
-          }, // Combinar campos de factura con dateStorage
-        },
-      },
-      {
-        $replaceRoot: { newRoot: "$factura" }, // Hacer que los campos de factura sean el nuevo root del documento
-      },
-      {
-        $lookup: {
-          from: "pagos",
-          let: { facturaId: "$_id" }, // Variable local para el _id de la factura
-          pipeline: [
-            {
-              $match: {
-                $expr: { $eq: ["$idOrden", { $toString: "$$facturaId" }] }, // Convertir el _id de la factura a string y compararlo con idOrden
-              },
-            },
-          ],
-          as: "ListPago", // Nombre del campo donde se almacenarán los pagos relacionados
-        },
-      },
-      {
-        $addFields: {
-          ListPago: {
-            $map: {
-              input: "$ListPago", // Itera sobre los pagos relacionados
-              as: "pago", // Alias para cada pago
-              in: {
-                // Agrega los campos específicos del pago
-                _id: "$$pago._id",
-                idUser: "$$pago.idUser",
-                idOrden: "$$pago.idOrden",
-                orden: "$codRecibo",
-                date: "$$pago.date",
-                nombre: "$Nombre",
-                total: "$$pago.total",
-                metodoPago: "$$pago.metodoPago",
-                Modalidad: "$Modalidad",
-              },
-            },
-          },
-        },
-      },
-    ]);
+    // Obtener todos los documentos de la colección Almacen
+    const almacenes = await Almacen.find();
 
-    res.status(200).json(reportesFacturas);
+    // Array para almacenar todas las facturas
+    let todasLasFacturas = [];
+
+    // Recorrer cada documento de Almacen
+    for (const almacen of almacenes) {
+      // Recorrer cada serviceOrder del documento
+      for (const orderId of almacen.serviceOrder) {
+        // Buscar la factura relacionada con el orderId
+        const factura = await Factura.findOne({ _id: orderId }).lean();
+        const pagosIds = factura.listPago;
+
+        // Buscar los detalles de cada pago usando los IDs
+        const ListPago = await Promise.all(
+          pagosIds.map(async (pagoId) => {
+            const pago = await Pagos.findById(pagoId);
+            if (!pago) {
+              throw new Error(`Pago con ID ${pagoId} no encontrado`);
+            }
+            const infoUser = await handleGetInfoUser(pago.idUser);
+            return {
+              _id: pago._id,
+              idUser: pago.idUser,
+              orden: factura.codRecibo,
+              idOrden: pago.idOrden,
+              date: pago.date,
+              nombre: factura.Nombre,
+              total: pago.total,
+              metodoPago: pago.metodoPago,
+              Modalidad: factura.Modalidad,
+              isCounted: pago.isCounted,
+              infoUser: infoUser,
+            };
+          })
+        );
+
+        // Si se encuentra una factura, agregarla a todasLasFacturas
+        if (factura) {
+          todasLasFacturas.push({
+            ...factura,
+            dateStorage: almacen.storageDate,
+            ListPago,
+          });
+        }
+      }
+    }
+
+    res.status(200).json(todasLasFacturas);
   } catch (error) {
     console.error("Error al obtener datos: ", error);
-    res
-      .status(500)
-      .json({ mensaje: "No se pudo obtener facturas almacenadas" });
+    res.status(500).json({ mensaje: "No se pudo obtener las facturas" });
   }
 });
 

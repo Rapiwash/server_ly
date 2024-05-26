@@ -27,6 +27,7 @@ const NegocioSchema = new mongoose.Schema(
       },
     ],
     oldOrder: Boolean,
+    hasMobility: Boolean,
   },
   { collection: "Negocio" }
 );

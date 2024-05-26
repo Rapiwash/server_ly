@@ -76,115 +76,74 @@ export const GetAnuladoId = async (id) => {
   }
 };
 
-export const GetPagosIdOrden = async (idOrden) => {
+export const GetPagoMasDetalleOrden = async (idPago) => {
   try {
-    const pagosByIdOrden = await Pagos.aggregate([
-      {
-        $match: { idOrden: idOrden }, // Filtrar por el idOrden proporcionado
-      },
-      {
-        $addFields: {
-          idOrdenObjectId: { $toObjectId: "$idOrden" }, // Convertir idOrden a ObjectId
-        },
-      },
-      {
-        $lookup: {
-          from: "facturas",
-          localField: "idOrdenObjectId",
-          foreignField: "_id",
-          as: "factura",
-        },
-      },
-      {
-        $unwind: "$factura",
-      },
-      {
-        $project: {
-          _id: "$_id",
-          idUser: "$idUser",
-          idOrden: "$idOrden",
-          orden: "$factura.codRecibo",
-          date: "$date",
-          nombre: "$factura.Nombre",
-          total: "$total",
-          metodoPago: "$metodoPago",
-          Modalidad: "$factura.Modalidad",
-          isCounted: "$isCounted",
-        },
-      },
-    ]);
+    const pagoInfo = await Pagos.findById(idPago);
 
-    return pagosByIdOrden.length > 0 ? pagosByIdOrden : [];
-  } catch (error) {
-    console.error("Error al obtener los datos por idOrden:", error);
-    throw error;
-  }
-};
+    const factura = await Factura.findById(pagoInfo.idOrden);
 
-export const GetPagosId = async (idPago) => {
-  try {
-    // Realizar la agregación para obtener la información del pago y la factura combinada
-    const pagoInfo = await Pagos.aggregate([
-      {
-        $addFields: {
-          idPagoString: { $toString: "$_id" }, // Convertir el _id a cadena
-        },
-      },
-      {
-        $match: {
-          idPagoString: idPago, // Comparar la cadena _id con idPago
-        },
-      },
-      {
-        $lookup: {
-          from: "facturas",
-          let: { idOrden: "$idOrden" },
-          pipeline: [
-            {
-              $match: {
-                $expr: {
-                  $eq: [
-                    { $toObjectId: "$$idOrden" }, // Convertir $$idOrden a ObjectId
-                    "$_id", // Comparar directamente el _id de la factura con el idOrden del pago
-                  ],
-                },
-              },
-            },
-          ],
-          as: "factura",
-        },
-      },
-      {
-        $unwind: "$factura",
-      },
-      {
-        $project: {
-          _id: "$_id",
-          idUser: "$idUser",
-          orden: "$factura.codRecibo",
-          idOrden: "$idOrden",
-          date: "$date",
-          nombre: "$factura.Nombre",
-          total: "$total",
-          metodoPago: "$metodoPago",
-          Modalidad: "$factura.Modalidad",
-          isCounted: "$isCounted",
-        },
-      },
-    ]);
-
-    if (pagoInfo.length === 0) {
-      throw new Error(
-        "No se encontró ningún documento con el _id proporcionado"
-      );
-    }
-
-    return {
-      ...pagoInfo[0],
-      infoUser: await handleGetInfoUser(pagoInfo[0].idUser),
-    }; // Devolver el primer documento encontrado
+    const detallePago = {
+      _id: pagoInfo._id,
+      idUser: pagoInfo.idUser,
+      orden: factura.codRecibo,
+      idOrden: pagoInfo.idOrden,
+      date: pagoInfo.date,
+      nombre: factura.Nombre,
+      total: pagoInfo.total,
+      metodoPago: pagoInfo.metodoPago,
+      Modalidad: factura.Modalidad,
+      isCounted: pagoInfo.isCounted,
+      infoUser: await handleGetInfoUser(pagoInfo.idUser),
+    };
+    return detallePago;
   } catch (error) {
     console.error("Error al obtener los datos por _id de pago:", error);
     throw error; // Propagar el error para que sea manejado por el llamador
+  }
+};
+
+export const GetListPagosMasDetalleOrden = async (idOrden) => {
+  try {
+    // Buscar la factura por su id
+    const factura = await Factura.findById(idOrden);
+
+    if (!factura) {
+      throw new Error("Factura no encontrada");
+    }
+
+    // Obtener los IDs de los pagos asociados a la factura
+    const pagosIds = factura.listPago;
+
+    // Buscar los detalles de cada pago usando los IDs
+    const ListDetallePagos = await Promise.all(
+      pagosIds.map(async (pagoId) => {
+        const pago = await Pagos.findById(pagoId);
+        if (!pago) {
+          throw new Error(`Pago con ID ${pagoId} no encontrado`);
+        }
+        const infoUser = await handleGetInfoUser(pago.idUser);
+        return {
+          _id: pago._id,
+          idUser: pago.idUser,
+          orden: factura.codRecibo,
+          idOrden: pago.idOrden,
+          date: pago.date,
+          nombre: factura.Nombre,
+          total: pago.total,
+          metodoPago: pago.metodoPago,
+          Modalidad: factura.Modalidad,
+          isCounted: pago.isCounted,
+          infoUser: infoUser,
+        };
+      })
+    );
+
+    return ListDetallePagos;
+  } catch (error) {
+    console.error(
+      "Error al obtener los detalles de pago por id de orden:",
+      error
+    );
+    throw error;
   }
 };

@@ -31,7 +31,7 @@ const facturaSchema = new mongoose.Schema({
   descuento: String,
   estadoPrenda: String,
   estado: String,
-  //
+  listPago: [],
   index: Number,
   dni: String,
   subTotal: String,

@@ -25,27 +25,13 @@ router.get("/get-list-asistencia/:fecha/:idPersonal", async (req, res) => {
     const startOfMonth = momentFecha.startOf("month").format("YYYY-MM-DD");
     const endOfMonth = momentFecha.endOf("month").format("YYYY-MM-DD");
 
-    const listAsistencia = await Asistencia.aggregate([
-      {
-        $match: {
-          idPersonal: idPersonal,
-          fecha: {
-            $gte: startOfMonth,
-            $lte: endOfMonth,
-          },
-        },
-      },
-      {
-        $project: {
-          fecha: 1,
-          tipoRegistro: 1,
-          ingreso: 1,
-          salida: 1,
-          observacion: 1,
-          time: 1,
-        },
-      },
-    ]);
+    // Obtener la lista de asistencias del personal en el mes dado
+    const listAsistencia = await Asistencia.find({
+      idPersonal: idPersonal,
+      fecha: { $gte: startOfMonth, $lte: endOfMonth },
+    })
+      .select("fecha tipoRegistro ingreso salida observacion time")
+      .lean();
 
     // Construir el objeto de información personal
     const infoPersonal = {

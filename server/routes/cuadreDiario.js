@@ -1,14 +1,13 @@
 import express from "express";
 import CuadreDiario from "../models/cuadreDiario.js";
 import Factura from "../models/Factura.js";
-import Anular from "../models/anular.js";
 import Gasto from "../models/gastos.js";
 import Usuario from "../models/usuarios/usuarios.js";
 import moment from "moment";
 
 import { openingHours } from "../middleware/middleware.js";
-import { GetAnuladoId, GetOrderId } from "../utils/utilsFuncion.js";
 import Pagos from "../models/pagos.js";
+import { GetPagoMasDetalleOrden } from "../utils/utilsFuncion.js";
 const router = express.Router();
 
 export const handleGetInfoUser = async (id) => {
@@ -191,58 +190,27 @@ async function obtenerInformacionDetallada(listCuadres) {
 }
 
 const handleGetMovimientosNCuadre = async (date, listCuadres) => {
-  // Mapear y obtener los arrays de pagos y gastos de cada documento
-  const IdsPagos = [].concat(
-    ...listCuadres.map((cuadre) => cuadre.Pagos.map((pago) => pago._id))
+  // Mapear y obtener los arrays de IDs de pagos y gastos de cada documento de cuadre
+  const IdsPagos = listCuadres.flatMap((cuadre) =>
+    cuadre.Pagos.map((pago) => pago._id)
   );
-  const IdsGastos = [].concat(
-    ...listCuadres.map((cuadre) => cuadre.Gastos.map((gasto) => gasto._id))
+  const IdsGastos = listCuadres.flatMap((cuadre) =>
+    cuadre.Gastos.map((gasto) => gasto._id)
   );
 
-  // Obtener todos los pagos en la fecha especificada
-  const listPagos = await Pagos.aggregate([
-    {
-      $match: { "date.fecha": date, isCounted: { $ne: false } },
-    },
-    {
-      $lookup: {
-        from: "facturas",
-        let: { idOrden: "$idOrden" }, // Guardamos idOrden como es
-        pipeline: [
-          {
-            $addFields: {
-              // Convertimos _id a String
-              _idToString: { $toString: "$_id" },
-            },
-          },
-          {
-            $match: {
-              // Comparamos idOrden con _id convertido a String
-              $expr: { $eq: ["$$idOrden", "$_idToString"] },
-            },
-          },
-        ],
-        as: "factura",
-      },
-    },
-    {
-      $unwind: "$factura", // Desenrollar el array "factura"
-    },
-    {
-      $project: {
-        // Proyectar solo los campos necesarios de la factura
-        _id: "$_id",
-        idUser: "$idUser",
-        orden: "$factura.codRecibo",
-        idOrden: "$idOrden",
-        date: "$date",
-        nombre: "$factura.Nombre",
-        total: "$total",
-        metodoPago: "$metodoPago",
-        Modalidad: "$factura.Modalidad",
-      },
-    },
-  ]);
+  // Obtener todos los pagos en la fecha especificada con isCounted diferente de false
+  const InfoPagos = await Pagos.find({
+    "date.fecha": date,
+    isCounted: { $ne: false },
+  });
+
+  // Obtener la información detallada de los pagos
+  const listPagos = await Promise.all(
+    InfoPagos.map(async (pago) => {
+      const detallePago = await GetPagoMasDetalleOrden(pago._id);
+      return detallePago;
+    })
+  );
 
   // Obtener todos los gastos en la fecha especificada
   const listGastos = await Gasto.find({
@@ -255,20 +223,11 @@ const handleGetMovimientosNCuadre = async (date, listCuadres) => {
   const setIDsGastos = new Set(IdsGastos);
 
   // Filtrar y obtener los pagos que no se encuentren en IDsPagos
-
-  const pagosNCuadre = await Promise.all(
-    listPagos
-      .filter((pago) => !setIDsPagos.has(pago._id.toString()))
-      .map(async (pago) => {
-        return {
-          ...pago,
-          infoUser: await handleGetInfoUser(pago.idUser),
-        };
-      })
+  const pagosNCuadre = listPagos.filter(
+    (pago) => !setIDsPagos.has(pago._id.toString())
   );
 
   // Filtrar y obtener los gastos que no se encuentren en IdsGastos
-
   const gastosNCuadre = await Promise.all(
     listGastos
       .filter((gasto) => !setIDsGastos.has(gasto._id.toString()))

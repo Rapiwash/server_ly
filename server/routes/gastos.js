@@ -4,6 +4,7 @@ import TipoGasto from "../models/tipoGastos.js";
 import { openingHours } from "../middleware/middleware.js";
 import { handleGetInfoUser } from "./cuadreDiario.js";
 import moment from "moment";
+import Usuarios from "../models/usuarios/usuarios.js";
 const router = express.Router();
 
 export const handleAddGasto = async (nuevoGasto) => {
@@ -76,72 +77,55 @@ router.get("/get-gastos/:fecha", async (req, res) => {
     // Consultar todos los tipos de gastos
     const tiposGastos = await TipoGasto.find();
 
-    // Agregar pipeline para filtrar los gastos del mes especificado y obtener la información del usuario asociada
-    const gastosAggregate = await Gasto.aggregate([
-      {
-        $match: {
-          "date.fecha": {
-            $gte: inicioMes,
-            $lte: finMes,
-          },
-        },
+    // Consultar los gastos en el rango de fechas especificado
+    const gastos = await Gasto.find({
+      "date.fecha": {
+        $gte: inicioMes,
+        $lte: finMes,
       },
-      {
-        $addFields: {
-          idUser: { $toObjectId: "$idUser" }, // Convertir idUser de string a ObjectId
-        },
-      },
-      {
-        $lookup: {
-          from: "Usuarios",
-          localField: "idUser",
-          foreignField: "_id",
-          as: "userInfo",
-        },
-      },
-      {
-        $unwind: "$userInfo",
-      },
-      {
-        $group: {
-          _id: "$tipo",
-          cantidad: { $sum: 1 },
-          monto: { $sum: { $toDouble: "$monto" } },
-          infoGastos: {
-            $push: {
-              motivo: "$motivo",
-              date: "$date",
-              monto: { $toDouble: "$monto" },
-              infoUser: {
-                name: "$userInfo.name",
-                rol: "$userInfo.rol",
-              },
-            },
-          },
-        },
-      },
-      {
-        $project: {
-          _id: 0,
-          name: "$_id",
-          cantidad: 1,
-          monto: 1,
-          infoGastos: 1,
-        },
-      },
-    ]);
+    });
 
-    // Combinar la información de tipos de gastos con los resultados de la agregación
-    const tipoGastosArray = tiposGastos.map((tipo) => {
-      const gasto = gastosAggregate.find((gasto) => gasto.name === tipo.name);
-      return {
+    // Obtener los IDs de los usuarios de los gastos
+    const usuariosIds = [...new Set(gastos.map((gasto) => gasto.idUser))];
+
+    // Consultar la información de usuario solo para los IDs necesarios
+    const usuariosInfo = await Usuarios.find(
+      { _id: { $in: usuariosIds } },
+      { name: 1, rol: 1 }
+    );
+
+    // Convertir la información de usuario a un mapa para un acceso más eficiente
+    const usuariosMap = usuariosInfo.reduce((map, usuario) => {
+      map[usuario._id] = { name: usuario.name, rol: usuario.rol };
+      return map;
+    }, {});
+
+    // Agrupar los gastos por tipo de gasto
+    const tipoGastosArray = [];
+    for (const tipo of tiposGastos) {
+      const gastosTipo = gastos.filter(
+        (gasto) => gasto.idTipoGasto === tipo._id.toString()
+      );
+
+      const totalMonto = gastosTipo.reduce(
+        (total, gasto) => total + parseFloat(gasto.monto),
+        0
+      );
+      const infoGastos = gastosTipo.map((gasto) => ({
+        motivo: gasto.motivo,
+        date: gasto.date,
+        monto: parseFloat(gasto.monto),
+        infoUser: usuariosMap[gasto.idUser] || null,
+      }));
+
+      tipoGastosArray.push({
         id: tipo._id,
         name: tipo.name,
-        cantidad: gasto ? gasto.cantidad : 0,
-        monto: gasto ? gasto.monto : 0,
-        infoGastos: gasto ? gasto.infoGastos : [],
-      };
-    });
+        cantidad: gastosTipo.length,
+        monto: totalMonto,
+        infoGastos: infoGastos,
+      });
+    }
 
     res.json(tipoGastosArray);
   } catch (error) {
