@@ -67,6 +67,7 @@ router.post("/add-factura", openingHours, async (req, res) => {
   try {
     const { infoOrden, infoPago } = req.body;
     const {
+      codRecibo,
       dateRecepcion,
       Modalidad,
       Nombre,
@@ -105,12 +106,18 @@ router.post("/add-factura", openingHours, async (req, res) => {
       hora: moment().format("HH:mm"),
     };
 
-    const codigoActual = await codFactura.findOne().sort({ _id: -1 }).lean();
+    let nCodigo;
+    if (modeRegistro === "nuevo") {
+      const codigoActual = await codFactura.findOne().sort({ _id: -1 }).lean();
+      nCodigo = codigoActual.codActual;
+    } else {
+      nCodigo = codRecibo;
+    }
 
     // Crear el nuevo registro con el índice asignado
     const nuevoDato = new Factura({
+      codRecibo: nCodigo,
       dateCreation,
-      codRecibo: codigoActual.codActual,
       dateRecepcion,
       Modalidad,
       Nombre,
