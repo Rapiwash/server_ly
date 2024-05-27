@@ -262,6 +262,7 @@ router.post("/add-factura", openingHours, async (req, res) => {
     await session.commitTransaction();
 
     let infoPagos = [];
+    const finalLPagos = [];
     if (lPagos.length > 0) {
       const idsPagos = lPagos.map((pago) => pago._id);
 
@@ -275,10 +276,7 @@ router.post("/add-factura", openingHours, async (req, res) => {
       infoPagos = await Pagos.find({
         _id: { $in: facturaGuardada.listPago },
       }).lean();
-    }
 
-    const finalLPagos = [];
-    if (lPagos.length > 0) {
       await Promise.all(
         lPagos.map(async (pago) => {
           const newInfoPago = {
@@ -286,7 +284,7 @@ router.post("/add-factura", openingHours, async (req, res) => {
             idUser: pago.idUser,
             orden: facturaGuardada.codRecibo,
             idOrden: pago.idOrden,
-            date: pago.data,
+            date: pago.date,
             nombre: facturaGuardada.Nombre,
             total: pago.total,
             metodoPago: pago.metodoPago,
@@ -403,71 +401,6 @@ router.get("/get-factura/date/:startDate/:endDate", async (req, res) => {
         };
       })
     );
-
-    res.status(200).json(resultados);
-  } catch (error) {
-    console.error("Error al obtener datos: ", error);
-    res.status(500).json({ mensaje: "Error interno del servidor" });
-  }
-});
-
-router.get("/get-factura/date/:startDate/:endDate", async (req, res) => {
-  const { startDate, endDate } = req.params;
-
-  try {
-    // Buscar todas las facturas dentro del rango de fechas
-    const ordenes = await Factura.find({
-      "dateRecepcion.fecha": {
-        $gte: startDate,
-        $lte: endDate,
-      },
-    }).lean();
-
-    // Obtener todos los pagos relevantes
-    const pagos = await Pagos.find().lean();
-
-    // Obtener todos los registros de donaciones relevantes
-    const donacionRegistros = await Donacion.find({
-      "donationDate.fecha": {
-        $gte: startDate,
-        $lte: endDate,
-      },
-    }).lean();
-
-    // Procesar cada orden de factura
-    const resultados = ordenes.map((orden) => {
-      // Filtrar los pagos relevantes para esta orden de factura
-      const pagosOrden = pagos.filter(
-        (pago) => pago.idOrden === orden._id.toString()
-      );
-
-      // Mapear los pagos relevantes al formato deseado
-      const ListPago = pagosOrden.map((pago) => ({
-        _id: pago._id,
-        idUser: pago.idUser,
-        idOrden: orden._id,
-        orden: orden.codRecibo,
-        ordenDateCreation: orden.dateCreation.fecha,
-        date: pago.date,
-        isCounted: pago.isCounted,
-        nombre: orden.Nombre,
-        total: pago.total,
-        metodoPago: pago.metodoPago,
-        Modalidad: pago.Modalidad,
-      }));
-
-      // Buscar la fecha de donación correspondiente
-      const donationDate = donacionRegistros.find((donado) => {
-        return donado.serviceOrder.includes(orden._id.toString());
-      })?.donationDate || { fecha: "", hora: "" };
-
-      // Devolver la orden de factura con los datos procesados
-      return {
-        ...orden,
-        ListPago,
-        donationDate,
-      };
-    });
 
     res.status(200).json(resultados);
   } catch (error) {
