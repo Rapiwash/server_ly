@@ -21,38 +21,40 @@ router.get("/get-reporte-mensual", async (req, res) => {
     const fechaInicial = moment(`${anio}-${mes}-01`, "YYYY-MM");
     const fechaFinal = fechaInicial.clone().endOf("month");
 
+    // Consultar las órdenes dentro del rango de fechas y estadoPrenda distinto de "anulado"
     const ordenes = await Factura.find({
       "dateRecepcion.fecha": {
         $gte: fechaInicial.format("YYYY-MM-DD"),
         $lte: fechaFinal.format("YYYY-MM-DD"),
       },
-      estadoPrenda: { $ne: "anulado" }, // EstadoPrenda debe ser distinto de "anulado"
+      estadoPrenda: { $ne: "anulado" },
     }).lean();
 
-    let ordenesMensual = [];
-    for (const orden of ordenes) {
-      const pagos = await Pagos.find({ _id: { $in: orden.listPago } });
+    // Obtener los IDs de todos los pagos de las órdenes
+    const idsPagos = ordenes.flatMap((orden) => orden.listPago);
 
-      // Utilizar map para transformar la lista de pagos en detallesPago
-      const ListPago = pagos.map((pago) => ({
-        _id: pago._id,
-        idUser: pago.idUser,
-        idOrden: pago.idOrden,
-        orden: orden.codRecibo,
-        date: pago.date,
-        nombre: orden.Nombre,
-        total: pago.total,
-        metodoPago: pago.metodoPago,
-        Modalidad: orden.Modalidad,
-      }));
+    // Consultar todos los pagos de las órdenes
+    const pagos = await Pagos.find({ _id: { $in: idsPagos } }).lean();
 
-      ordenesMensual.push({ ...orden, ListPago });
-    }
+    // Crear un mapa de pagos por ID de orden para un acceso más rápido
+    const pagosPorOrden = pagos.reduce((acc, pago) => {
+      if (!acc[pago.idOrden]) {
+        acc[pago.idOrden] = [];
+      }
+      acc[pago.idOrden].push(pago);
+      return acc;
+    }, {});
+
+    // Combinar las órdenes con sus respectivos pagos
+    const ordenesMensual = ordenes.map((orden) => ({
+      ...orden,
+      ListPago: pagosPorOrden[orden._id] || [],
+    }));
 
     res.status(200).json(ordenesMensual);
   } catch (error) {
     console.error(error);
-    res.status(500).json({ mensaje: "No se pudo Generar reporte EXCEL" });
+    res.status(500).json({ mensaje: "No se pudo generar el reporte EXCEL" });
   }
 });
 
