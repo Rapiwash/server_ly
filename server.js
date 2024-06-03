@@ -212,7 +212,6 @@ app.get("/", (req, res) => {
       </head>
       <body>
         <h1>Estado del Servidor</h1>
-        Aveces
         <p>El servidor está funcionando correctamente.</p>
       </body>
     </html>

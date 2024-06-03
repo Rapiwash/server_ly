@@ -4,7 +4,8 @@ import Factura from "../models/Factura.js";
 import moment from "moment";
 import db from "../config/db.js";
 import Pagos from "../models/pagos.js";
-import { handleGetInfoUser } from "./cuadreDiario.js";
+import Usuario from "../models/usuarios/usuarios.js";
+import { mapArrayByKey, mapObjectByKey } from "../utils/utilsFuncion.js";
 
 const router = express.Router();
 
@@ -60,55 +61,74 @@ router.post("/add-to-warehouse", async (req, res) => {
 router.get("/get-warehouse-service-order", async (req, res) => {
   try {
     // Obtener todos los documentos de la colección Almacen
-    const almacenes = await Almacen.find();
+    const almacenes = await Almacen.find().lean();
 
-    // Array para almacenar todas las facturas
-    let todasLasFacturas = [];
+    // Obtener todos los IDs de serviceOrder de todos los documentos de Almacen
+    const serviceOrderIds = almacenes.flatMap(
+      (almacen) => almacen.serviceOrder
+    );
 
-    // Recorrer cada documento de Almacen
-    for (const almacen of almacenes) {
-      // Recorrer cada serviceOrder del documento
-      for (const orderId of almacen.serviceOrder) {
-        // Buscar la factura relacionada con el orderId
-        const factura = await Factura.findOne({ _id: orderId }).lean();
-        const pagosIds = factura.listPago;
+    // Buscar todas las facturas relacionadas con los serviceOrderIds
+    const facturas = await Factura.find({
+      _id: { $in: serviceOrderIds },
+    }).lean();
 
-        // Buscar los detalles de cada pago usando los IDs
-        const ListPago = await Promise.all(
-          pagosIds.map(async (pagoId) => {
-            const pago = await Pagos.findById(pagoId);
-            if (!pago) {
-              throw new Error(`Pago con ID ${pagoId} no encontrado`);
-            }
-            const infoUser = await handleGetInfoUser(pago.idUser);
-            return {
-              _id: pago._id,
-              idUser: pago.idUser,
-              orden: factura.codRecibo,
-              idOrden: pago.idOrden,
-              date: pago.date,
-              nombre: factura.Nombre,
-              total: pago.total,
-              metodoPago: pago.metodoPago,
-              Modalidad: factura.Modalidad,
-              isCounted: pago.isCounted,
-              infoUser: infoUser,
-            };
-          })
-        );
+    // Obtener todos los IDs de listPago de todas las facturas
+    const listPagosIds = facturas.flatMap((factura) => factura.listPago);
 
-        // Si se encuentra una factura, agregarla a todasLasFacturas
-        if (factura) {
-          todasLasFacturas.push({
-            ...factura,
-            dateStorage: almacen.storageDate,
-            ListPago,
-          });
-        }
+    // Buscar todos los pagos relacionados con los listPagosIds
+    const pagos = await Pagos.find({ _id: { $in: listPagosIds } }).lean();
+
+    // Agrupar los pagos por ID de orden en un array
+    const pagosMap = mapArrayByKey(pagos, "idOrden");
+
+    // Obtener todos los idUser de los pagos sin repeticiones
+    const idUsers = [...new Set(pagos.map((pago) => pago.idUser))];
+
+    // Buscar la información de los usuarios relacionados con los idUsers
+    const usuarios = await Usuario.find(
+      { _id: { $in: idUsers } },
+      {
+        _id: 1,
+        name: 1,
+        usuario: 1,
+        rol: 1,
       }
-    }
+    ).lean();
 
-    res.status(200).json(todasLasFacturas);
+    // Crear un mapa de usuarios por su _id
+    const usuariosMap = mapObjectByKey(usuarios, "_id");
+
+    const mapAlmacen = almacenes.reduce((map, almacen) => {
+      almacen.serviceOrder.forEach((orderId) => {
+        Object.assign(map, { [orderId]: almacen.storageDate });
+      });
+      return map;
+    }, {});
+
+    // Mapear las facturas con sus pagos correspondientes
+    const facturasAlmacen = facturas.map((factura) => {
+      const ListPago = (pagosMap[factura._id] || []).map((pago) => ({
+        _id: pago._id,
+        idUser: pago.idUser,
+        idOrden: pago.idOrden,
+        orden: factura.codRecibo,
+        date: pago.date,
+        nombre: factura.Nombre,
+        total: pago.total,
+        metodoPago: pago.metodoPago,
+        Modalidad: factura.Modalidad,
+        isCounted: pago.isCounted,
+        infoUser: usuariosMap[pago.idUser],
+      }));
+      return {
+        ...factura,
+        ListPago,
+        dateStorage: mapAlmacen[factura._id.toString()],
+      };
+    });
+
+    res.status(200).json(facturasAlmacen);
   } catch (error) {
     console.error("Error al obtener datos: ", error);
     res.status(500).json({ mensaje: "No se pudo obtener las facturas" });

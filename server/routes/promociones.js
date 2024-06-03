@@ -78,31 +78,18 @@ router.post("/add-promocion", async (req, res) => {
 router.put("/update-promocion/:id", async (req, res) => {
   try {
     const promocionId = req.params.id;
-    const {
-      prenda,
-      cantidadMin,
-      alcance,
-      tipoDescuento,
-      tipoPromocion,
-      descripcion,
-      descuento,
-      vigencia,
-      state,
-    } = req.body;
+    const newInfoPromo = req.body;
+
+    // Comprueba si los datos a actualizar existen en el cuerpo de la solicitud
+    if (!req.body || Object.keys(newInfoPromo).length === 0) {
+      return res
+        .status(400)
+        .json({ mensaje: "Los datos de actualización son requeridos" });
+    }
 
     const promocionActualizada = await Promociones.findByIdAndUpdate(
       promocionId,
-      {
-        prenda,
-        cantidadMin,
-        alcance,
-        tipoDescuento,
-        tipoPromocion,
-        descripcion,
-        descuento,
-        vigencia,
-        state,
-      },
+      newInfoPromo,
       { new: true }
     );
 

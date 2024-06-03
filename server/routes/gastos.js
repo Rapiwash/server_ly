@@ -5,6 +5,7 @@ import { openingHours } from "../middleware/middleware.js";
 import { handleGetInfoUser } from "./cuadreDiario.js";
 import moment from "moment";
 import Usuarios from "../models/usuarios/usuarios.js";
+import { mapArrayByKey, mapObjectByKey } from "../utils/utilsFuncion.js";
 const router = express.Router();
 
 export const handleAddGasto = async (nuevoGasto) => {
@@ -74,9 +75,6 @@ router.get("/get-gastos/:fecha", async (req, res) => {
     const inicioMes = moment(momentFecha).startOf("month").format("YYYY-MM-DD");
     const finMes = moment(momentFecha).endOf("month").format("YYYY-MM-DD");
 
-    // Consultar todos los tipos de gastos
-    const tiposGastos = await TipoGasto.find();
-
     // Consultar los gastos en el rango de fechas especificado
     const gastos = await Gasto.find({
       "date.fecha": {
@@ -85,28 +83,26 @@ router.get("/get-gastos/:fecha", async (req, res) => {
       },
     });
 
-    // Obtener los IDs de los usuarios de los gastos
+    // Obtener los IDs únicos Usuario
     const usuariosIds = [...new Set(gastos.map((gasto) => gasto.idUser))];
+
+    // Consultar los tipos de gastos necesarios
+    const tiposGastos = await TipoGasto.find();
 
     // Consultar la información de usuario solo para los IDs necesarios
     const usuariosInfo = await Usuarios.find(
       { _id: { $in: usuariosIds } },
-      { name: 1, rol: 1 }
+      { name: 1, rol: 1, usuario: 1 }
     );
 
     // Convertir la información de usuario a un mapa para un acceso más eficiente
-    const usuariosMap = usuariosInfo.reduce((map, usuario) => {
-      map[usuario._id] = { name: usuario.name, rol: usuario.rol };
-      return map;
-    }, {});
+    const usuariosMap = mapObjectByKey(usuariosInfo, "_id");
+    const gastosMap = mapArrayByKey(gastos, "idTipoGasto");
 
-    // Agrupar los gastos por tipo de gasto
+    // Procesar los gastos y calcular los totales por tipo de gasto
     const tipoGastosArray = [];
-    for (const tipo of tiposGastos) {
-      const gastosTipo = gastos.filter(
-        (gasto) => gasto.idTipoGasto === tipo._id.toString()
-      );
-
+    for (const tipoGasto of tiposGastos) {
+      const gastosTipo = gastosMap[tipoGasto._id] || [];
       const totalMonto = gastosTipo.reduce(
         (total, gasto) => total + parseFloat(gasto.monto),
         0
@@ -117,10 +113,9 @@ router.get("/get-gastos/:fecha", async (req, res) => {
         monto: parseFloat(gasto.monto),
         infoUser: usuariosMap[gasto.idUser] || null,
       }));
-
       tipoGastosArray.push({
-        id: tipo._id,
-        name: tipo.name,
+        id: tipoGasto._id,
+        name: tipoGasto.name,
         cantidad: gastosTipo.length,
         monto: totalMonto,
         infoGastos: infoGastos,

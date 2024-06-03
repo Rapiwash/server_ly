@@ -16,6 +16,92 @@ function generateRandomCode(length) {
   return code;
 }
 
+router.post("/generate-multiples-cupones", async (req, res) => {
+  try {
+    const { codigoPromocion, cantCupones } = req.body;
+
+    if (
+      !codigoPromocion ||
+      !cantCupones ||
+      isNaN(cantCupones) ||
+      cantCupones <= 0
+    ) {
+      return res.status(400).json({
+        mensaje:
+          "Debe proporcionar un código de promoción válido y una cantidad válida de cupones mayor a cero",
+      });
+    }
+
+    let codigosGenerados = [];
+
+    while (codigosGenerados.length < cantCupones) {
+      // Generar los códigos necesarios
+      const cantidadRestante = cantCupones - codigosGenerados.length;
+      const nuevosCodigos = generateUniqueCodes(
+        cantidadRestante,
+        codigosGenerados
+      );
+
+      // Verificar si los códigos están duplicados en la colección y te devuelve los duplicados
+      const cuponesExistentes = await Cupones.find({
+        codigoCupon: { $in: nuevosCodigos },
+      }).distinct("codigoCupon");
+
+      const codigosUnicos = nuevosCodigos.filter((codigo) => {
+        return !cuponesExistentes.includes(codigo);
+      });
+
+      // Agregar los códigos únicos al arreglo de codigosGenerados
+      codigosGenerados = codigosGenerados.concat(codigosUnicos);
+    }
+
+    // Ahora que tenemos todos los códigos únicos, podemos guardarlos en la base de datos
+    const nuevosCupones = codigosGenerados.map((codigoCupon) => {
+      return new Cupones({
+        codigoPromocion,
+        codigoCupon,
+        estado: true, // Por defecto, el estado es true
+        dateCreation: {
+          fecha: moment().format("YYYY-MM-DD"),
+          hora: moment().format("HH:mm"),
+        },
+        dateUse: {
+          fecha: "",
+          hora: "",
+        },
+      });
+    });
+
+    // Guardar todos los nuevos cupones en la base de datos
+    await Cupones.insertMany(nuevosCupones);
+
+    res.status(201).json(codigosGenerados);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ mensaje: "Error al generar cupones" });
+  }
+});
+
+function generateUniqueCodes(amount, existingCodes) {
+  const uniqueCodes = [];
+
+  while (uniqueCodes.length < amount) {
+    let codigoCupon;
+
+    // Generar un código de cupón único
+    do {
+      codigoCupon = generateRandomCode(6);
+    } while (
+      existingCodes.includes(codigoCupon) ||
+      uniqueCodes.includes(codigoCupon)
+    );
+
+    uniqueCodes.push(codigoCupon);
+  }
+
+  return uniqueCodes;
+}
+
 router.get("/generate-codigo-cupon", async (req, res) => {
   try {
     let codigoCupon;
@@ -162,12 +248,10 @@ router.get("/use-cupon/:codigoCupon", async (req, res) => {
     return res.json("Cupón utilizado exitosamente");
   } catch (error) {
     console.error(error);
-    res
-      .status(500)
-      .json({
-        validacion: false,
-        res: "Error no se pudiedo actualizar el cupón",
-      });
+    res.status(500).json({
+      validacion: false,
+      res: "Error no se pudiedo actualizar el cupón",
+    });
   }
 });
 
