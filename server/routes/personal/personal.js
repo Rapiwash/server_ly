@@ -52,8 +52,14 @@ router.put("/actualizar-personal/:id", async (req, res) => {
     const idPersonal = req.params.id;
 
     // Obtener los datos actualizados del cuerpo de la solicitud
-    const { name, horaIngreso, horaSalida, pagoByHour, dateNacimiento } =
-      req.body;
+    const {
+      name,
+      horaIngreso,
+      horaSalida,
+      pagoByHour,
+      dateNacimiento,
+      pagoMensual,
+    } = req.body;
 
     // Buscar el personal por su ID y actualizarlo
     const personalActualizado = await Personal.findByIdAndUpdate(
