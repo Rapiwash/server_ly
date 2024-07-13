@@ -7,6 +7,7 @@ const personalSchema = new mongoose.Schema({
   pagoByHour: Number,
   dateNacimiento: String,
   birthDayUsed: Array,
+  pagoMensual: Number,
 });
 
 const personal = mongoose.model("personal", personalSchema);
