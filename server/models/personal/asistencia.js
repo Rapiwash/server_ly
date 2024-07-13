@@ -13,10 +13,6 @@ const asistenciaSchema = new mongoose.Schema({
     saved: Boolean,
   },
   observacion: String,
-  time: {
-    hora: Number,
-    minutos: Number,
-  },
 });
 
 const asistencia = mongoose.model("asistencia", asistenciaSchema);

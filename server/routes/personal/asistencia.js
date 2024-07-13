@@ -55,15 +55,8 @@ router.get("/get-list-asistencia/:fecha/:idPersonal", async (req, res) => {
 router.post("/registrar-asistencia", async (req, res) => {
   try {
     // Obtener los datos del cuerpo de la solicitud
-    const {
-      idPersonal,
-      fecha,
-      tipoRegistro,
-      ingreso,
-      salida,
-      observacion,
-      time,
-    } = req.body;
+    const { idPersonal, fecha, tipoRegistro, ingreso, salida, observacion } =
+      req.body;
 
     // Crear una instancia del modelo Asistencia con los datos recibidos
     const nuevaAsistencia = new Asistencia({
@@ -73,7 +66,6 @@ router.post("/registrar-asistencia", async (req, res) => {
       ingreso,
       salida,
       observacion,
-      time,
     });
 
     // Guardar la nueva asistencia en la base de datos
@@ -105,8 +97,7 @@ router.put("/actualizar-asistencia/:id", async (req, res) => {
     const idAsistencia = req.params.id;
 
     // Obtener los datos actualizados del cuerpo de la solicitud
-    const { fecha, tipoRegistro, ingreso, salida, observacion, time } =
-      req.body;
+    const { fecha, tipoRegistro, ingreso, salida, observacion } = req.body;
 
     // Buscar la asistencia por su ID
     const asistenciaAntesDeActualizar = await Asistencia.findById(idAsistencia);
@@ -125,7 +116,6 @@ router.put("/actualizar-asistencia/:id", async (req, res) => {
         ingreso,
         salida,
         observacion,
-        time,
       },
       { new: true } // Para devolver la asistencia actualizada después de la actualización
     );

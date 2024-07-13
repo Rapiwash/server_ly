@@ -180,10 +180,13 @@ async function handleAddFactura(data, session) {
   // 6. ADD PAGO
   let ListPago = [];
   if (infoPago) {
-    const nuevoPago = await handleAddPago({
-      ...infoPago,
-      idOrden: newOrden._id,
-    });
+    const nuevoPago = await handleAddPago(
+      {
+        ...infoPago,
+        idOrden: newOrden._id,
+      },
+      session
+    );
 
     ListPago.push(nuevoPago);
   }
