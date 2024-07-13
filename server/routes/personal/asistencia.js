@@ -42,6 +42,7 @@ router.get("/get-list-asistencia/:fecha/:idPersonal", async (req, res) => {
       pagoByHour: personalInfo.pagoByHour,
       dateNacimiento: personalInfo.dateNacimiento,
       birthDayUsed: personalInfo.birthDayUsed,
+      pagoMensual: personalInfo.pagoMensual,
       listAsistencia,
     };
 
