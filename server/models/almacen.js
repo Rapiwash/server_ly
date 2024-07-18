@@ -1,17 +1,16 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const AlmacenSchema = new mongoose.Schema(
   {
-    serviceOrder: [],
+    idOrden: String,
     storageDate: {
       fecha: String,
       hora: String,
     },
   },
-  { collection: 'Almacen' }
+  { collection: "Almacen" }
 );
 
-const Almacen = mongoose.model('Almacen', AlmacenSchema);
+const Almacen = mongoose.model("Almacen", AlmacenSchema);
 
 export default Almacen;
-  

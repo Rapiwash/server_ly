@@ -122,19 +122,31 @@ export const openingHours = async (req, res, next) => {
 
 // Verifica q no existe ni correo ni usuario iguales
 export const checkUniqueFields = async (req, res, next) => {
-  const { usuario, email } = req.body;
+  const { id } = req.params;
+  const { usuario, email, estado } = req.body; // Asume que `id` se pasa en el cuerpo de la solicitud en caso de actualización
   const duplicateFields = [];
 
-  // Verifica si el nombre de usuario ya existe en la colección
-  const existingUserByUsername = await Usuario.findOne({ usuario });
-  if (existingUserByUsername) {
-    duplicateFields.push("usuario");
+  // Crea el filtro inicial
+  let filter = {
+    $or: [{ usuario }, { email }],
+    state: { $ne: "eliminado" },
+  };
+
+  // Si es una actualización, excluye el ID actual
+  if (estado === "update") {
+    filter._id = { $ne: id };
   }
 
-  // Verifica si el correo electrónico ya existe en la colección
-  const existingUserByEmail = await Usuario.findOne({ email });
-  if (existingUserByEmail) {
-    duplicateFields.push("correo");
+  // Realiza una sola consulta para verificar ambos campos
+  const existingUser = await Usuario.findOne(filter);
+
+  if (existingUser) {
+    if (existingUser.usuario === usuario) {
+      duplicateFields.push("usuario");
+    }
+    if (existingUser.email === email) {
+      duplicateFields.push("correo");
+    }
   }
 
   // Si se encontraron duplicados en nombre de usuario o correo, envía una respuesta con los campos duplicados

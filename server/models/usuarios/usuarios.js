@@ -9,6 +9,7 @@ const usuarioSchema = new mongoose.Schema(
     email: String,
     phone: String,
     state: String,
+    nivel: String,
   },
   { collection: "Usuarios" }
 );

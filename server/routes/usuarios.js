@@ -256,7 +256,7 @@ router.post("/login", async (req, res) => {
       return res.status(401).json({ mensaje: "Contraseña incorrecta" });
     }
 
-    if (user._validate === false) {
+    if (user.state === "inactivo") {
       return res
         .status(200)
         .json({ type: "validate", info: user._id, id: user._id });
@@ -342,7 +342,7 @@ router.post("/first-login", async (req, res) => {
 
     await nuevoAcceso.save();
 
-    // Actualiza el campo _validate en el modelo Usuarios
+    // Actualiza el campo state en el modelo Usuarios
     await Usuario.updateOne({ _id: user._id }, { $set: { state: "activo" } });
     // Busca y elimina cualquier registro en Verify con el mismo id
     await UserRegistroCodes.deleteMany({ idUser: user?._id });
@@ -375,6 +375,7 @@ router.post("/register", checkUniqueFields, async (req, res) => {
       email,
       phone,
       state: "inactivo",
+      nivel: "usuario",
     });
 
     const usuarioGuardado = await newUser.save();
@@ -389,7 +390,7 @@ router.post("/register", checkUniqueFields, async (req, res) => {
 });
 
 // Ruta para editar un usuario por su ID
-router.put("/edit-user/:id", async (req, res) => {
+router.put("/edit-user/:id", checkUniqueFields, async (req, res) => {
   const { id } = req.params;
   const { name, email, phone, rol, usuario, password } = req.body;
 
@@ -471,7 +472,7 @@ router.put("/recover-password/:id", verifyCodigo, async (req, res) => {
 // Ruta para obtener todos los usuarios
 router.get("/get-list-users", async (req, res) => {
   try {
-    const users = await Usuario.find();
+    const users = await Usuario.find({ nivel: { $ne: "master" } });
     res.json(users);
   } catch (error) {
     console.error("Error al obtener la lista de usuarios:", error);
@@ -483,18 +484,18 @@ router.put("/delete-user/:id", async (req, res) => {
   const userId = req.params.id;
 
   try {
-    // Verifica si el usuario existe en la base de datos
-    const user = await Usuario.findById(userId);
+    // Cambia el estado del usuario a "eliminado" usando findByIdAndUpdate
+    const user = await Usuario.findByIdAndUpdate(
+      userId,
+      { state: "eliminado" },
+      { new: true, select: "_id" }
+    );
 
     if (!user) {
       return res.status(404).json({ mensaje: "Usuario no encontrado" });
     }
 
-    // Cambia el estado del usuario a "eliminado"
-    user.state = "eliminado";
-    await user.save();
-
-    res.json({ mensaje: "Estado del usuario cambiado a 'eliminado'" });
+    res.json(user._id);
   } catch (error) {
     console.error("Error al cambiar el estado del usuario:", error);
     res.status(500).json({ mensaje: "Error al cambiar el estado del usuario" });

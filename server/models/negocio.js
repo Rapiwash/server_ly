@@ -28,6 +28,7 @@ const NegocioSchema = new mongoose.Schema(
     ],
     oldOrder: Boolean,
     hasMobility: Boolean,
+    filterListDefault: String, // date , pendiente
   },
   { collection: "Negocio" }
 );

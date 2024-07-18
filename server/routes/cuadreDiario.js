@@ -129,8 +129,8 @@ async function obtenerInformacionDetallada(listCuadres) {
         const factura = facturasMap[pago.idOrden];
         return {
           _id: pagoId,
-          orden: factura.codRecibo,
-          nombre: factura.Nombre,
+          codRecibo: factura.codRecibo,
+          Nombre: factura.Nombre,
           total: pago.total,
           metodoPago: pago.metodoPago,
           Modalidad: factura.Modalidad,
@@ -215,10 +215,10 @@ const handleGetMovimientosNCuadre = async (date, listCuadres) => {
     return {
       _id: pago._id,
       idUser: pago.idUser,
-      orden: factura ? factura.codRecibo : null,
+      codRecibo: factura ? factura.codRecibo : null,
       idOrden: pago.idOrden,
       date: pago.date,
-      nombre: factura ? factura.Nombre : null,
+      Nombre: factura ? factura.Nombre : null,
       total: pago.total,
       metodoPago: pago.metodoPago,
       Modalidad: factura ? factura.Modalidad : null,
@@ -497,16 +497,20 @@ router.get("/get-pagos/cuadre/:date", async (req, res) => {
     // Buscar documentos por fecha y proyectar solo el campo Pagos
     const cuadreDiarios = await CuadreDiario.find(
       { "date.fecha": date },
-      { Pagos: 1, _id: 0 } // Proyectar solo el campo Pagos
+      { Pagos: 1, Gastos: 1, _id: 0 } // Proyectar solo el campo Pagos
     );
 
     // Extraer y juntar todos los pagos
-    const allPagos = cuadreDiarios.reduce((acc, doc) => {
+    const Pagos = cuadreDiarios.reduce((acc, doc) => {
       return acc.concat(doc.Pagos);
+    }, []);
+    // Extraer y juntar todos los pagos
+    const Gastos = cuadreDiarios.reduce((acc, doc) => {
+      return acc.concat(doc.Gastos);
     }, []);
 
     // Enviar la respuesta con todos los pagos unidos
-    res.json(allPagos);
+    res.json({ Pagos, Gastos });
   } catch (error) {
     console.error(error);
     res.status(500).send("Error en el servidor: " + error.message);

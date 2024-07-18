@@ -1,16 +1,16 @@
-import mongoose from 'mongoose';
+import mongoose from "mongoose";
 
 const DonationSchema = new mongoose.Schema(
   {
-    serviceOrder: [],
+    idOrden: String,
     donationDate: {
       fecha: String,
       hora: String,
     },
   },
-  { collection: 'Donacion' }
+  { collection: "Donacion" }
 );
 
-const Donacion = mongoose.model('Donacion', DonationSchema);
+const Donacion = mongoose.model("Donacion", DonationSchema);
 
 export default Donacion;

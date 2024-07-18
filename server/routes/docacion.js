@@ -15,61 +15,46 @@ router.post("/add-to-donation", async (req, res) => {
 
   try {
     const { Ids } = req.body;
-    // Actualizar la ubicación de las facturas
-    const updatedFacturas = [];
 
-    // Genera la fecha y hora actual usando moment
-    const fechaHora = moment().format("YYYY-MM-DD HH:mm");
+    const ordersDonados = [];
+    const Fecha = moment().format("YYYY-MM-DD");
+    const Hora = moment().format("HH:mm");
+
+    // Actualizar la ubicación y estado de las Ordenes
     for (const facturaId of Ids) {
-      const factura = await Factura.findById(facturaId).session(session);
-      if (!factura) {
-        throw new Error(`Factura no encontrada: ${facturaId}`);
-      }
+      const orderUpdate = await Factura.findByIdAndUpdate(
+        facturaId,
+        {
+          location: 3,
+          estadoPrenda: "donado",
+        },
+        {
+          new: true,
+          session: session,
+        }
+      ).lean();
 
-      const almacenData = await Almacen.findOne({
-        serviceOrder: facturaId,
-      }).session(session);
-      if (!almacenData) {
-        throw new Error(
-          `Datos de almacen no encontrados para la factura: ${facturaId}`
-        );
-      }
+      // Eliminar Registro de Almacen
+      await Almacen.findOneAndDelete({ idOrden: facturaId }).session(session);
 
-      factura.location = 3; // Cambiar la ubicación a 3
-      factura.estadoPrenda = "donado";
-
-      await factura.save({ session: session });
-      await Almacen.updateMany(
-        { serviceOrder: facturaId },
-        { $pull: { serviceOrder: facturaId } },
-        { session: session }
-      );
-
-      updatedFacturas.push({
-        ...factura.toObject(),
+      // Agregar las Orden a Donacion
+      const donacion = new Donacion({
+        idOrden: facturaId,
         donationDate: {
-          fecha: fechaHora.split(" ")[0],
-          hora: fechaHora.split(" ")[1],
+          fecha: Fecha,
+          hora: Hora,
         },
       });
+
+      await donacion.save({ session: session });
+
+      ordersDonados.push(orderUpdate);
     }
 
-    // Crea un nuevo registro de Donacion con los IDs y la fecha generada
-    const donacion = new Donacion({
-      serviceOrder: Ids,
-      donationDate: {
-        fecha: fechaHora.split(" ")[0],
-        hora: fechaHora.split(" ")[1],
-      },
-    });
-
-    await donacion.save({ session: session });
     // Devolver una respuesta exitosa
-    res.status(201).json(updatedFacturas);
-    // Confirmar la transacción
+    res.status(201).json(ordersDonados);
     await session.commitTransaction();
   } catch (error) {
-    // En caso de error, hacer un rollback de la transacción
     await session.abortTransaction();
     res
       .status(500)
@@ -80,35 +65,20 @@ router.post("/add-to-donation", async (req, res) => {
 router.get("/get-donated-orders", async (req, res) => {
   try {
     // Obtén todos los registros de Donacion
-    const donacionRegistros = await Donacion.find();
+    const donaciones = await Donacion.find();
 
     // Array para almacenar los resultados finales
-    const resultados = [];
+    const donatedOrders = [];
 
-    // Itera a través de los registros de Almacen
-    for (const donated of donacionRegistros) {
-      // Itera a través de los serviceOrder del registro de Almacen
-      for (const serviceOrderId of donated.serviceOrder) {
-        // Encuentra la factura correspondiente a serviceOrderId
-        const factura = await Factura.findOne({ _id: serviceOrderId });
-
-        if (factura) {
-          // Convierte el objeto factura a un objeto JavaScript estándar
-          const facturaObj = factura.toObject();
-
-          // Crea un objeto que incluye todos los campos de factura y agrega dateStorage
-          const resultadoFactura = {
-            ...facturaObj,
-            dateStorage: donated.storageDate,
-          };
-
-          // Agrega el objeto a los resultados
-          resultados.push(resultadoFactura);
-        }
-      }
+    // Itera a través de los registros de Donacion
+    for (const donated of donaciones) {
+      // Encuentra la factura correspondiente a serviceOrderId
+      const orden = await Factura.findById(donated.idOrden).lean();
+      // Agrega el objeto a los resultados
+      donatedOrders.push({ ...orden, donationDate: donated.donationDate });
     }
 
-    res.status(200).json(resultados);
+    res.status(200).json(donatedOrders);
   } catch (error) {
     console.error("Error al obtener datos: ", error);
     res.status(500).json({ error: "Error interno del servidor" });
@@ -119,30 +89,15 @@ router.get("/get-donated/:idOrder", async (req, res) => {
   const idOrder = req.params.idOrder;
   try {
     // Obtén todos los registros de Donacion
-    const donacionRegistros = await Donacion.find();
+    const infoDonacion = await Donacion.findOne(
+      { idOrden: idOrder },
+      { donationDate: 1 }
+    );
 
-    // Array para almacenar los resultados finales
-    let resultados;
-
-    // Itera a través de los registros de Almacen
-    for (const donated of donacionRegistros) {
-      // Itera a través de los serviceOrder del registro de Almacen
-      for (const serviceOrderId of donated.serviceOrder) {
-        if (serviceOrderId === idOrder) {
-          // Encuentra la factura correspondiente a serviceOrderId
-          resultados = donated.donationDate;
-          break; // Si se encontró la factura, puedes salir del bucle
-        }
-      }
-      if (resultados) {
-        break;
-      }
-    }
-
-    if (resultados) {
-      res.status(200).json(resultados);
+    if (infoDonacion) {
+      res.status(200).json(infoDonacion.donationDate);
     } else {
-      res.status(404).json({ mensaje: "ID de orden no encontrado" });
+      res.status(404).json({ mensaje: "Info de Donacion no encontrado" });
     }
   } catch (error) {
     console.error("Error al obtener datos: ", error);

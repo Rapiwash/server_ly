@@ -33,7 +33,6 @@ const facturaSchema = new mongoose.Schema({
   estadoPrenda: String,
   estado: String,
   listPago: [],
-  index: Number,
   dni: String,
   subTotal: String,
   totalNeto: String,
