@@ -182,7 +182,7 @@ io.on("connection", (socket) => {
   });
 
   socket.on("client:cClientes", (info) => {
-    socket.broadcast.emit("server:cClientes", info);
+    io.emit("server:cClientes", info);
   });
 
   // Maneja el evento cuando un cliente se desconecta
