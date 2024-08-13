@@ -1,6 +1,7 @@
 import Servicio from "../models/portafolio/servicios.js";
 import Categoria from "../models/categorias.js";
 import Anular from "../models/anular.js";
+import { nameDelivery } from "./varsGlobal.js";
 
 // Función para agrupar objetos usando una clave de identificación
 export function mapObjectByKey(array, key) {
@@ -40,7 +41,7 @@ export const handleGetInfoDelivery = async () => {
     // Consulta a la colección Servicio
     const servicio = await Servicio.findOne({
       idCategoria: categoriaId,
-      nombre: "Delivery",
+      nombre: nameDelivery,
     });
 
     // Verifica si se encontró el servicio
