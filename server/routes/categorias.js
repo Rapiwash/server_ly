@@ -3,6 +3,7 @@ import Categoria from "../models/categorias.js";
 import Producto from "../models/portafolio/productos.js";
 import Servicio from "../models/portafolio/servicios.js";
 import moment from "moment";
+import { nameDelivery } from "../utils/varsGlobal.js";
 
 const router = express.Router();
 
@@ -22,7 +23,10 @@ router.post("/add-categoria", (req, res) => {
   newCategoria
     .save()
     .then((categoriaGuardado) => {
-      res.json(categoriaGuardado);
+      res.json({
+        tipoAction: "added",
+        data: categoriaGuardado,
+      });
     })
     .catch((error) => {
       console.error("Error al Crear Categoria:", error);
@@ -51,7 +55,7 @@ router.get("/get-categorias", async (req, res) => {
 
     // Datos de servicios a registrar
     const serviciosARegistrar = [
-      { nombre: "Delivery", precioVenta: 6, simboloMedida: "vj" },
+      { nombre: nameDelivery, precioVenta: 6, simboloMedida: "vj" },
       { nombre: "Otros", precioVenta: 0, simboloMedida: "u" },
     ];
 
@@ -98,7 +102,10 @@ router.put("/update-categorias/:idCategoria", async (req, res) => {
 
     // Verificar si se encontró y actualizó la categoría
     if (updatedCategoria) {
-      return res.json(updatedCategoria); // Devolver la categoría actualizada
+      return res.json({
+        tipoAction: "updated",
+        data: updatedCategoria,
+      }); // Devolver la categoría actualizada
     } else {
       return res.status(404).json({ mensaje: "No se encontró la categoría" }); // Manejar el caso en que no se encuentre la categoría
     }
@@ -139,7 +146,12 @@ router.delete("/delete-categoria/:idCategoria", async (req, res) => {
 
     // Si no hay productos ni servicios vinculados, eliminar la categoría
     await Categoria.findByIdAndRemove(idCategoria);
-    return res.json({ mensaje: "Categoría eliminada con éxito." });
+    return res.json({
+      tipoAction: "deleted",
+      data: {
+        _id: idCategoria,
+      },
+    });
   } catch (error) {
     console.error("Error al eliminar categoría:", error);
     res.status(500).json({ mensaje: "Error al eliminar categoría" });

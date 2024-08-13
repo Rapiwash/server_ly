@@ -22,6 +22,8 @@ const facturaSchema = new mongoose.Schema({
       cantidad: Number,
       descripcion: String,
       precio: String,
+      monto: String,
+      descuentoManual: String,
       total: String,
     },
   ],
@@ -29,18 +31,22 @@ const facturaSchema = new mongoose.Schema({
   direccion: String,
   datePrevista: {},
   dateEntrega: {},
-  descuento: String,
-  estadoPrenda: String,
-  estado: String,
+  dateRecojo: {},
+  descuento: {
+    estado: Boolean,
+    modoDescuento: String, // Puntos | Promocion | Manual | Ninguno
+    info: { type: mongoose.Schema.Types.Mixed },
+    monto: Number,
+  },
+  estadoPrenda: String, // entregado | anulado | pendiente | donado
+  estado: String, // reservado | registrado
   listPago: [],
   dni: String,
   subTotal: String,
   totalNeto: String,
   cargosExtras: {},
-  factura: Boolean,
-  modeRegistro: String,
+  modeRegistro: String, // nuevo || antiguo
   notas: [],
-  modoDescuento: String,
   gift_promo: [],
   location: Number,
   attendedBy: {
@@ -48,7 +54,7 @@ const facturaSchema = new mongoose.Schema({
     rol: String,
   },
   lastEdit: [],
-  typeRegistro: String,
+  typeRegistro: String, // normal
 });
 
 const Factura = mongoose.model("Factura", facturaSchema);

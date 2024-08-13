@@ -21,19 +21,6 @@ export const handleAddPago = async (nuevoPago, session) => {
   }
 };
 
-export const handleGetPagosByIdOrden = async (idOrden) => {
-  try {
-    // Busca todos los pagos con la idOrden especificada
-    const pagos = await Pagos.find({ idOrden });
-
-    // Devuelve los pagos encontrados
-    return pagos;
-  } catch (error) {
-    console.error("Error al buscar pagos por idOrden:", error);
-    throw error; // Puedes manejar el error según tus necesidades
-  }
-};
-
 // Ruta para agregar un nuevo registro de pago
 router.post("/add-pago", async (req, res) => {
   const session = await db.startSession();

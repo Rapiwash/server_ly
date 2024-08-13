@@ -472,7 +472,10 @@ router.put("/recover-password/:id", verifyCodigo, async (req, res) => {
 // Ruta para obtener todos los usuarios
 router.get("/get-list-users", async (req, res) => {
   try {
-    const users = await Usuario.find({ nivel: { $ne: "master" } });
+    const users = await Usuario.find({
+      nivel: { $ne: "master" },
+      state: { $ne: "eliminado" },
+    });
     res.json(users);
   } catch (error) {
     console.error("Error al obtener la lista de usuarios:", error);

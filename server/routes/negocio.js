@@ -40,6 +40,8 @@ router.get("/get-info-negocio", async (req, res) => {
         ],
         oldOrder: true,
         hasMobility: true,
+        filterListDefault: "pendiente", // others , pendiente
+        maxConsultasDefault: 500,
       });
 
       await nuevoNegocio.save();
