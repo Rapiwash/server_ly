@@ -46,7 +46,7 @@ const server = http.createServer(app);
 
 export const io = new SocketServer(server, {
   cors: {
-    origin: "*",
+    origin: "https://rapiwash.conosur.oneskala.com",
   },
 });
 
