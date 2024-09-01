@@ -12,9 +12,15 @@ const router = express.Router();
 
 export const handleGetInfoUser = async (id) => {
   try {
-    // Seleccionar solo los campos necesarios del usuario
+    // Buscar el usuario por ID y seleccionar solo los campos necesarios
     const iUser = await Usuario.findById(id).select("name usuario rol").lean();
 
+    // Verificar si el usuario existe
+    if (!iUser) {
+      throw new Error(`No se encontró un usuario con el ID: ${id}`);
+    }
+
+    // Devolver la información del usuario
     return {
       _id: iUser._id,
       name: iUser.name,

@@ -46,18 +46,15 @@ const server = http.createServer(app);
 
 export const io = new SocketServer(server, {
   cors: {
-    // origin: "https://rapiwash.conosur.oneskala.com",
-    origin: "https://orclavaya-pm1e.onrender.com",
+    origin: "*",
   },
 });
 
 app.use(
   cors({
-    // origin: "https://rapiwash.conosur.oneskala.com",
-    origin: "https://orclavaya-pm1e.onrender.com",
+    origin: "*",
   })
 );
-
 app.use(express.json());
 
 io.on("connection", (socket) => {
