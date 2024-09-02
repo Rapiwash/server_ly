@@ -55,6 +55,7 @@ app.use(
     origin: "*",
   })
 );
+
 app.use(express.json());
 
 io.on("connection", (socket) => {

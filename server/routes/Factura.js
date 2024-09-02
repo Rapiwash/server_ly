@@ -1517,4 +1517,50 @@ router.put("/update-factura/completa/:id", async (req, res) => {
   }
 });
 
+router.get("/count-orders/:fecha", async (req, res) => {
+  const { fecha } = req.params;
+
+  try {
+    // Parsear la fecha para obtener el mes y el año
+    const mes = moment(fecha).month() + 1; // Los meses en moment están indexados en 0
+    const año = moment(fecha).year();
+
+    // Crear los límites de tiempo para la consulta
+    const startOfMonth = moment(`${año}-${mes}`, "YYYY-MM")
+      .startOf("month")
+      .format("YYYY-MM-DD");
+    const endOfMonth = moment(`${año}-${mes}`, "YYYY-MM")
+      .endOf("month")
+      .format("YYYY-MM-DD");
+
+    // Contar las facturas por modalidad
+    const tiendaCount = await Factura.countDocuments({
+      "dateCreation.fecha": { $gte: startOfMonth, $lte: endOfMonth },
+      estadoPrenda: { $nin: ["anulado", "donado"] },
+      estado: "registrado",
+      Modalidad: "Tienda",
+    });
+
+    const deliveryCount = await Factura.countDocuments({
+      "dateCreation.fecha": { $gte: startOfMonth, $lte: endOfMonth },
+      estadoPrenda: { $nin: ["anulado", "donado"] },
+      estado: "registrado",
+      Modalidad: "Delivery",
+    });
+
+    // Calcular el total
+    const totalCount = tiendaCount + deliveryCount;
+
+    // Responder con el conteo
+    res.status(200).json({
+      Tienda: tiendaCount,
+      Delivery: deliveryCount,
+      Total: totalCount,
+    });
+  } catch (error) {
+    console.error("Error al contar documentos: ", error);
+    res.status(500).json({ mensaje: "Error interno del servidor" });
+  }
+});
+
 export default router;

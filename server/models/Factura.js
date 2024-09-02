@@ -10,7 +10,7 @@ const facturaSchema = new mongoose.Schema({
     fecha: String,
     hora: String,
   },
-  Modalidad: String,
+  Modalidad: String, // Tienda | Delivery
   Nombre: String,
   idCliente: String,
   Items: [
